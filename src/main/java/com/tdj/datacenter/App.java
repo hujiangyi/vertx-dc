@@ -1,20 +1,24 @@
 package com.tdj.datacenter;
 
 import com.tdj.common.Contact;
+import com.tdj.common.ModuleInit;
 import com.tdj.common.annotation.Dao;
 import com.tdj.common.annotation.Utils;
+import com.tdj.common.utils.RedisUtils;
 import com.tdj.common.verticle.NacosVerticle;
-import com.tdj.common.verticle.RedisVerticle;
 import io.vertx.config.ConfigRetriever;
 import io.vertx.config.ConfigRetrieverOptions;
 import io.vertx.config.ConfigStoreOptions;
 import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
+import java.lang.annotation.Annotation;
 import java.net.URL;
 import java.util.*;
 
@@ -53,6 +57,16 @@ public class App {
                 } catch (Exception e) {
                     log.error("" , e);
                 }
+                Vertx.vertx().eventBus().consumer("init success", message -> {
+                    log.info("nacos init success----------->");
+                    try {
+                        Properties nacosConfig = new Properties();
+                        nacosConfig.load(new StringReader(message.body().toString()));
+                        initModule(Vertx.vertx(),nacosConfig);
+                    } catch (IOException e) {
+                        log.error("",e);
+                    }
+                });
                 DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(ar.result());
                 Contact.getVertxInstance().deployVerticle(new NacosVerticle(),deploymentOptions);
                 Contact.getVertxInstance().deployVerticle(new RedisVerticle(),deploymentOptions);
@@ -63,6 +77,30 @@ public class App {
             }
         });
     }
+
+    private static void initModule(Vertx vertx, Properties nacosConfig) {
+        Future<Boolean> redis = initModule(vertx,nacosConfig, RedisUtils.class);
+        redis.onComplete(handler->{
+            log.info("All modules have been initialized and variable injection has begun.");
+            vertx.eventBus().send("init doInjection",null);
+        });
+    }
+
+    private static Future<Boolean> initModule(Vertx vertx, Properties nacosConfig, Class clazz) {
+        Annotation[] annotations = clazz.getDeclaredAnnotations();
+        for (Annotation annotation:annotations) {
+            if (annotation instanceof Dao || annotation instanceof Utils) {
+                try{
+                    ModuleInit moduleInit = (ModuleInit) Contact.beanMap.get(annotation.annotationType().getName()).get(clazz);
+                    return moduleInit.init(vertx,nacosConfig);
+                } catch (Exception e) {
+                    log.error("",e);
+                }
+            }
+        }
+        return Future.succeededFuture(false);
+    }
+
 
     public static Map<Class,List<Class>> findByAnnotations(String basePackage,List<Class> annotations) throws IOException, ClassNotFoundException {
         Map<Class,List<Class>> clazzs = new HashMap<>();

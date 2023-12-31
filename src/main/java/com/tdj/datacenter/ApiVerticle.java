@@ -231,8 +231,8 @@ public class ApiVerticle  extends BaseVerticle {
             String value = json.getString("value");
             long interval = json.getLong("interval");//秒
             long offset = json.getLong("offset") * 1000;//秒
-            Future<Void> setExFuture = redisUtils.setEx(vertx, key, interval, value);
-            Future<String> psubscribeKeyExpiredFuture = redisUtils.psubscribeKeyExpired(vertx, key, value, interval);
+            Future<Void> setExFuture = redisUtils.setEx(key, interval, value);
+            Future<String> psubscribeKeyExpiredFuture = redisUtils.psubscribeKeyExpired(key, value, interval);
             setExFuture.onComplete(handler -> {
                 vertx.executeBlocking(run->{
                     try {
@@ -240,7 +240,7 @@ public class ApiVerticle  extends BaseVerticle {
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-                    redisUtils.del(vertx, key);
+                    redisUtils.del(key);
                 },err->{
 
                 });
@@ -266,7 +266,7 @@ public class ApiVerticle  extends BaseVerticle {
             JsonObject json = buffer.toJsonObject();
             String key = json.getString("key");
             String value = json.getString("value");
-            Future<Boolean> future = redisUtils.setNx(vertx, key, value);
+            Future<Boolean> future = redisUtils.setNx(key, value);
             future.onComplete(handler->{
                 if (handler.succeeded()) {
                     routingContext.response().putHeader("content-type", "text/plain");
@@ -286,7 +286,7 @@ public class ApiVerticle  extends BaseVerticle {
             JsonObject json = buffer.toJsonObject();
             String key = json.getString("key");
             String value = json.getString("value");
-            Future<String> future = redisUtils.getSet(vertx, key, value);
+            Future<String> future = redisUtils.getSet(key, value);
             future.onComplete(handler->{
                 if (handler.succeeded()) {
                     if (handler.result() == null) {
@@ -311,7 +311,7 @@ public class ApiVerticle  extends BaseVerticle {
             JsonObject json = buffer.toJsonObject();
             String key = json.getString("key");
             String value = json.getString("value");
-            Future<String> future = redisUtils.get(vertx, key);
+            Future<String> future = redisUtils.get(key);
             future.onComplete(handler->{
                 if (handler.succeeded()) {
                     if (handler.result() == null) {
@@ -336,7 +336,7 @@ public class ApiVerticle  extends BaseVerticle {
             JsonObject json = buffer.toJsonObject();
             String key = json.getString("key");
             String value = json.getString("value");
-            redisUtils.set(vertx, key,value);
+            redisUtils.set(key,value);
             routingContext.response().putHeader("content-type", "text/plain");
             routingContext.response().end("OK");
         });
@@ -348,7 +348,7 @@ public class ApiVerticle  extends BaseVerticle {
             JsonObject json = buffer.toJsonObject();
             String key = json.getString("key");
             String value = json.getString("value");
-            Future<JsonArray> future = redisUtils.keys(vertx, key);
+            Future<JsonArray> future = redisUtils.keys(key);
             future.onComplete(handler->{
                 if (handler.succeeded()) {
                     routingContext.response().putHeader("content-type", "text/plain");
@@ -368,11 +368,11 @@ public class ApiVerticle  extends BaseVerticle {
             JsonObject json = buffer.toJsonObject();
             String key = json.getString("key");
             long expire = json.getLong("expire");//秒
-            Future<Boolean> future = redisUtils.getLock(vertx, key,expire * 1000);
+            Future<Boolean> future = redisUtils.getLock(key,expire * 1000);
             future.compose(handler->{
                 if (!handler) {
 //                    log.info("删除锁后重新获取锁");
-//                    return redisUtils.delLock(vertx,key).compose(t-> redisUtils.getLock(vertx, key,expire * 1000));
+//                    return redisUtils.delLock(vertx,key).compose(t-> redisUtils.getLock(key,expire * 1000));
                     return Future.succeededFuture(false);
                 } else {
                     return Future.succeededFuture(true);
@@ -393,7 +393,7 @@ public class ApiVerticle  extends BaseVerticle {
         request.bodyHandler(buffer -> {
             JsonObject json = buffer.toJsonObject();
             String key = json.getString("key");
-            redisUtils.delLock(vertx, key);
+            redisUtils.delLock(key);
             routingContext.response().putHeader("content-type", "text/plain");
             routingContext.response().end("OK");
         });
