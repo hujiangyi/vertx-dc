@@ -69,7 +69,6 @@ public class App {
                 });
                 DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(ar.result());
                 Contact.getVertxInstance().deployVerticle(new NacosVerticle(),deploymentOptions);
-                Contact.getVertxInstance().deployVerticle(new RedisVerticle(),deploymentOptions);
 //                Contact.getVertxInstance().deployVerticle(new CheckVerticle(),deploymentOptions);
                 Contact.getVertxInstance().deployVerticle(new ApiVerticle(),deploymentOptions);
 //                Contact.getVertxInstance().deployVerticle(new ScheduleVerticle(),deploymentOptions);
