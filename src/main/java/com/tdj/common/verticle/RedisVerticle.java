@@ -1,5 +1,6 @@
 package com.tdj.common.verticle;
 
+import com.alibaba.nacos.common.utils.StringUtils;
 import com.tdj.common.BaseVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 public class RedisVerticle extends BaseVerticle {
@@ -168,23 +170,29 @@ public class RedisVerticle extends BaseVerticle {
         future.onComplete(complet->{
             final long timerId;
             RedisConnection client = future.result();
+            final AtomicBoolean isTimeout = new AtomicBoolean(false);
             //timer设置为interval + 10000 是为了避免边界异常
-            timerId = vertx.setTimer(interval + 1000,timer->{
+            timerId = vertx.setTimer(interval + 10,timer->{
                 //未监听到超时事件，无需callback业务端，直接结束本次的连接
                 log.info("没有在间隔{}内收到{}的超时事件,主动关闭此次redis连接",interval,key);
                 message.fail(-1,"超过最大等待时长，没有监听到{}的超时事件，主动退出监听");
-                client.close();
+                synchronized (isTimeout) {
+                    isTimeout.set(true);
+                    client.close();
+                }
             });
             client.handler(resopnse -> {
-                if (resopnse.size() == 4
-                        && resopnse.get(0).toString().equalsIgnoreCase("pmessage")
-                        && resopnse.get(1).toString().equalsIgnoreCase("__keyevent@*__:expired")
-                        && resopnse.get(3).toString().equalsIgnoreCase(key)) {
-                    //收到了过期事件，需要callback业务端处理此事件
-                    message.reply(resopnse.get(3).toString());
-                    log.info("监听到{}的超时事件，取消边界检查器",interval);
-                    vertx.cancelTimer(timerId);
-                    client.close();
+                synchronized (isTimeout) {
+                    if (resopnse.size() == 4
+                            && resopnse.get(0).toString().equalsIgnoreCase("pmessage")
+                            && resopnse.get(1).toString().equalsIgnoreCase("__keyevent@*__:expired")
+                            && resopnse.get(3).toString().equalsIgnoreCase(key) && !isTimeout.get()) {
+                        //收到了过期事件，需要callback业务端处理此事件
+                        message.reply(resopnse.get(3).toString());
+                        log.info("监听到{}的超时事件，取消边界检查器",interval);
+                        vertx.cancelTimer(timerId);
+                        client.close();
+                    }
                 }
             });
             RedisAPI api = RedisAPI.api(client);

@@ -120,56 +120,39 @@ public class RedisUtils {
     /**
      * 获取锁，true 则得到锁，false 已被锁定
      * @param lockName       锁名称
-     * @param lockExoire     锁时间
+     * @param lockExpire     锁时间
      * @return
      */
-    public Future<Boolean> getLock(Vertx vertx, String lockName, long lockExoire, Handler<AsyncResult<Message<JsonObject>>> replyHandler) {
+    public Future<Boolean> getLock(Vertx vertx, String lockName, long lockExpire) {
         Promise<Boolean> promise = Promise.promise();
         // 获取过期时间点的毫秒值
-        long expireAt = System.currentTimeMillis() + lockExoire + 1;
+        long expireAt = System.currentTimeMillis() + lockExpire + 1;
         Future<Boolean> setNxFuture = setNx(vertx,lockName,String.valueOf(expireAt));
-        setNxFuture.onComplete(setNxHandler->{
-            if (setNxHandler.succeeded()) {
-                Boolean acquire = setNxHandler.result();
-                if (acquire) {
-                    promise.complete(true);
-                } else {
-                    Future<String> getFuture = get(vertx,lockName);
-                    getFuture.onComplete(getHandler->{
-                        if (getHandler.succeeded()) {
-                            String expireTimeStr = getHandler.result();
-                            if (StringUtils.isNotBlank(expireTimeStr)) {
-                                try {
-                                    long expireTime = Long.parseLong(expireTimeStr);
-                                    // 如果锁已经过期
-                                    if (expireTime < System.currentTimeMillis()) {
-                                        Future<String> getSetFuture = getSet(vertx,lockName,String.valueOf(System.currentTimeMillis() + lockExoire + 1));
-                                        getSetFuture.onComplete(getSetHandler->{
-                                            if (getSetHandler.succeeded()) {
-                                                promise.complete(Long.parseLong(new String(getSetHandler.result())) < System.currentTimeMillis());
-                                            } else {
-                                                promise.complete(false);
-                                            }
-                                        });
-                                    }
-                                } catch (Exception e) {
-                                    log.error("",e);
-                                    promise.complete(false);
-                                }
-                            }
-                        } else {
-                            promise.complete(false);
-                        }
-                    }).onFailure(getErr-> {
-                        promise.complete(false);
-                    });
-                }
+        setNxFuture.compose(acquire->{
+            if (acquire) {
+                promise.complete(true);
+                return Future.failedFuture("");
             } else {
-                promise.complete(false);
+                return get(vertx,lockName);
             }
-        }).onFailure(setNxErr->{
+        }).compose(expireTimeStr->{
+            if (StringUtils.isNotBlank(expireTimeStr)) {
+                long expireTime = Long.parseLong(expireTimeStr);
+                // 如果锁已经过期
+                if (expireTime < System.currentTimeMillis()) {
+                    return getSet(vertx,lockName,String.valueOf(System.currentTimeMillis() + lockExpire + 1));
+                }
+            }
             promise.complete(false);
+            return Future.failedFuture("");
+        }).compose(handler->{
+            promise.complete(Long.parseLong(handler) < System.currentTimeMillis());
+            return Future.succeededFuture(true);
         });
         return promise.future();
+    }
+
+    public Future<Void> delLock(Vertx vertx, String key){
+        return del(vertx,key);
     }
 }

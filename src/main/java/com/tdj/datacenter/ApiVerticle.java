@@ -13,17 +13,14 @@ import com.tdj.datacenter.domain.Oauth2Token;
 import com.tdj.datacenter.domain.StockConfig;
 import com.tdj.datacenter.feign.PlatformService;
 import com.tdj.datacenter.handler.CheckHandler;
-import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.eventbus.Message;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
-import io.vertx.redis.client.RedisConnection;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +28,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
 public class ApiVerticle  extends BaseVerticle {
@@ -56,12 +52,14 @@ public class ApiVerticle  extends BaseVerticle {
         router.get("/datacenter/test").handler(this::test);
         router.post("/datacenter/setloglevel").handler(this::configLogLevel);
         router.post("/datacenter/feign").handler(this::feignTest);
-        router.get("/datacenter/redis/psubscribe_key_expired/").handler(this::redisPsubscribeKeyExpired);
+        router.post("/datacenter/redis/psubscribe_key_expired/").handler(this::redisPsubscribeKeyExpired);
         router.post("/datacenter/redis/set/").handler(this::redisSet);
         router.post("/datacenter/redis/get/").handler(this::redisGet);
         router.post("/datacenter/redis/setnx/").handler(this::redisSetNx);
         router.post("/datacenter/redis/keys/").handler(this::redisKeys);
         router.post("/datacenter/redis/getset/").handler(this::redisGetSet);
+        router.post("/datacenter/redis/getlock/").handler(this::redisGetLock);
+        router.post("/datacenter/redis/dellock/").handler(this::redisDelLock);
 
         // 将路由与服务器关联
         server.requestHandler(router);
@@ -226,23 +224,39 @@ public class ApiVerticle  extends BaseVerticle {
     }
 
     private void redisPsubscribeKeyExpired(RoutingContext routingContext) {
-        String key = "abcdef";
-        String value = "test";
-        long interval = 5;
-        redisUtils.setEx(vertx,key,interval,value);
-//        redisUtils.del(vertx,key);
-        Future<String> future = redisUtils.psubscribeKeyExpired(vertx,key,value,interval);
-        future.onComplete(message ->{
-            if (message.succeeded()) {
-                log.info("{} is expired,to do something here!",message.result());
-                String responseMessage = "检测到" + message.result() + "的超时事件";
-                routingContext.response().putHeader("content-type", "text/plain");
-                routingContext.response().end(responseMessage);
-            } else {
-                log.error("redisPsubscribeKeyExpired error>",message.cause());
-                routingContext.response().putHeader("content-type", "text/plain");
-                routingContext.response().end(message.cause().getMessage());
-            }
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            String value = json.getString("value");
+            long interval = json.getLong("interval");//秒
+            long offset = json.getLong("offset") * 1000;//秒
+            Future<Void> setExFuture = redisUtils.setEx(vertx, key, interval, value);
+            Future<String> psubscribeKeyExpiredFuture = redisUtils.psubscribeKeyExpired(vertx, key, value, interval);
+            setExFuture.onComplete(handler -> {
+                vertx.executeBlocking(run->{
+                    try {
+                        Thread.sleep(offset);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    redisUtils.del(vertx, key);
+                },err->{
+
+                });
+            });
+            psubscribeKeyExpiredFuture.onComplete(message -> {
+                if (message.succeeded()) {
+                    log.info("{} is expired,to do something here!", message.result());
+                    String responseMessage = "检测到" + message.result() + "的超时事件";
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end(responseMessage);
+                } else {
+                    log.error("redisPsubscribeKeyExpired error>", message.cause());
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end(message.cause().getMessage());
+                }
+            });
         });
     }
 
@@ -345,6 +359,43 @@ public class ApiVerticle  extends BaseVerticle {
                     routingContext.response().end(handler.cause().getMessage());
                 }
             });
+        });
+    }
+
+    private void redisGetLock(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            long expire = json.getLong("expire");//秒
+            Future<Boolean> future = redisUtils.getLock(vertx, key,expire * 1000);
+            future.compose(handler->{
+                if (!handler) {
+//                    log.info("删除锁后重新获取锁");
+//                    return redisUtils.delLock(vertx,key).compose(t-> redisUtils.getLock(vertx, key,expire * 1000));
+                    return Future.succeededFuture(false);
+                } else {
+                    return Future.succeededFuture(true);
+                }
+            }).onComplete(handler->{
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end(handler.result().toString());
+            }).onFailure(err->{
+                log.error("",err.getCause());
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end(err.getMessage());
+            });
+        });
+    }
+
+    private void redisDelLock(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            redisUtils.delLock(vertx, key);
+            routingContext.response().putHeader("content-type", "text/plain");
+            routingContext.response().end("OK");
         });
     }
 }
