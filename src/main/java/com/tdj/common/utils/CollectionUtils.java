@@ -1,4 +1,4 @@
-package com.tdj.datacenter.utils;
+package com.tdj.common.utils;
 import java.util.Collection;
 
 public class CollectionUtils {

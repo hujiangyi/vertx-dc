@@ -1,5 +1,6 @@
 package com.tdj.datacenter;
 
+import com.tdj.common.BaseVerticle;
 import com.tdj.datacenter.handler.CheckHandler;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
@@ -14,37 +15,16 @@ import java.util.Properties;
 import java.util.TimeZone;
 
 @Slf4j
-public class CheckVerticle extends AbstractVerticle {
+public class CheckVerticle extends BaseVerticle {
     private EventBus eventBus;
     private Properties nacosConfig;
     private CheckHandler checkHandler = new CheckHandler();
 
     @Override
-    public void start(Promise<Void> startPromise) {
+    public void doInit() {
         TimeZone timeZone = TimeZone.getDefault();
         log.info("Default TimeZone: " + timeZone.getDisplayName());
         TimeZone.setDefault(TimeZone.getTimeZone("GMT+8"));
-        eventBus = vertx.eventBus();
-        eventBus.consumer("nacos renew", message -> {
-            System.out.println("nacos renew----------->" + message.toString());
-            try {
-                nacosConfig = new Properties();
-                nacosConfig.load(new StringReader(message.body().toString()));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            initStockConfig();
-        });
-        eventBus.consumer("init success", message -> {
-            System.out.println("check init success----------->");
-            try {
-                nacosConfig = new Properties();
-                nacosConfig.load(new StringReader(message.body().toString()));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            initStockConfig();
-        });
 //        vertx.eventBus().consumer("check_cmd", (Message<Properties> config) -> {
 //            checkHandler.doCheck(vertx);
 //        });
@@ -61,9 +41,5 @@ public class CheckVerticle extends AbstractVerticle {
                 checkHandler.doCheck(vertx,nacosConfig);
             }
         });
-    }
-
-    private void initStockConfig() {
-
     }
 }

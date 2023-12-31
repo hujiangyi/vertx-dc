@@ -1,4 +1,4 @@
-package com.tdj.datacenter.domain;
+package com.tdj.common.domain;
 
 import lombok.Data;
 

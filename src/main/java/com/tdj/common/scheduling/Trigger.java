@@ -1,4 +1,4 @@
-package com.tdj.datacenter.scheduling;
+package com.tdj.common.scheduling;
 import java.util.Date;
 
 public interface Trigger {

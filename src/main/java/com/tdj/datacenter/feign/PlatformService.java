@@ -1,9 +1,9 @@
 package com.tdj.datacenter.feign;
 
-import com.tdj.datacenter.annotation.FeignService;
+import com.tdj.common.annotation.FeignService;
 import com.tdj.datacenter.domain.EntUser;
 import com.tdj.datacenter.domain.Oauth2Token;
-import com.tdj.datacenter.domain.Result;
+import com.tdj.common.domain.Result;
 import feign.Headers;
 import feign.RequestLine;
 import io.vertx.core.Future;

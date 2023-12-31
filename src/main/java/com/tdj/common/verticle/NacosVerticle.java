@@ -1,4 +1,4 @@
-package com.tdj.datacenter;
+package com.tdj.common.verticle;
 
 import cn.hutool.core.net.NetUtil;
 import com.alibaba.nacos.api.NacosFactory;

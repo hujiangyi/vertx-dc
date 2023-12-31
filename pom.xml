@@ -21,11 +21,11 @@
 
     <dependencies>
         <!-- https://mvnrepository.com/artifact/jakarta.annotation/jakarta.annotation-api -->
-        <dependency>
-            <groupId>jakarta.annotation</groupId>
-            <artifactId>jakarta.annotation-api</artifactId>
-            <version>2.1.1</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>jakarta.annotation</groupId>-->
+<!--            <artifactId>jakarta.annotation-api</artifactId>-->
+<!--            <version>2.1.1</version>-->
+<!--        </dependency>-->
 
         <dependency>
             <groupId>io.vertx</groupId>
@@ -56,6 +56,11 @@
             <groupId>io.vertx</groupId>
             <artifactId>vertx-web-client</artifactId>
             <version>${io.vertx.version}</version> <!-- 请根据实际情况选择合适的版本 -->
+        </dependency>
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-redis-client</artifactId>
+            <version>${io.vertx.version}</version>
         </dependency>
         <dependency>
             <groupId>io.github.openfeign</groupId>

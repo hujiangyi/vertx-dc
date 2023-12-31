@@ -2,46 +2,47 @@ package com.tdj.datacenter;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import com.tdj.datacenter.dingding.DingDingApi;
-import com.tdj.datacenter.dingding.DingDingApiNew;
+import com.tdj.common.BaseVerticle;
+import com.tdj.common.dingding.DingDingApi;
+import com.tdj.common.dingding.DingDingApiNew;
+import com.tdj.common.domain.Result;
+import com.tdj.common.utils.FeignUtils;
+import com.tdj.common.utils.RedisUtils;
 import com.tdj.datacenter.domain.EntUser;
 import com.tdj.datacenter.domain.Oauth2Token;
-import com.tdj.datacenter.domain.Result;
 import com.tdj.datacenter.domain.StockConfig;
 import com.tdj.datacenter.feign.PlatformService;
 import com.tdj.datacenter.handler.CheckHandler;
-import com.tdj.datacenter.utils.FeignUtils;
-import io.vertx.core.AbstractVerticle;
+import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
+import io.vertx.redis.client.RedisConnection;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.StringReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Properties;
+import java.util.Set;
 
 @Slf4j
-public class ApiVerticle  extends AbstractVerticle {
-    private Properties nacosConfig = new Properties();
-    private EventBus eventBus;
+public class ApiVerticle  extends BaseVerticle {
     private DingDingApi dingDingApi = new DingDingApi();
     private DingDingApiNew dingDingApiNew = new DingDingApiNew();
     private FeignUtils feignUtils = new FeignUtils();
     private CheckHandler checkHandler = new CheckHandler();
+    private RedisUtils redisUtils;
 
     @Override
-    public void start(Promise<Void> startPromise) {
+    public void doInit() {
         // 创建 HTTP 服务器
         HttpServer server = vertx.createHttpServer();
 
@@ -55,6 +56,12 @@ public class ApiVerticle  extends AbstractVerticle {
         router.get("/datacenter/test").handler(this::test);
         router.post("/datacenter/setloglevel").handler(this::configLogLevel);
         router.post("/datacenter/feign").handler(this::feignTest);
+        router.get("/datacenter/redis/psubscribe_key_expired/").handler(this::redisPsubscribeKeyExpired);
+        router.post("/datacenter/redis/set/").handler(this::redisSet);
+        router.post("/datacenter/redis/get/").handler(this::redisGet);
+        router.post("/datacenter/redis/setnx/").handler(this::redisSetNx);
+        router.post("/datacenter/redis/keys/").handler(this::redisKeys);
+        router.post("/datacenter/redis/getset/").handler(this::redisGetSet);
 
         // 将路由与服务器关联
         server.requestHandler(router);
@@ -64,29 +71,8 @@ public class ApiVerticle  extends AbstractVerticle {
         server.listen(port, ar -> {
             if (ar.succeeded()) {
                 log.info("Server started on port {}",port);
-                startPromise.complete();
             } else {
                 System.out.println("Server failed to start");
-                startPromise.fail(ar.cause());
-            }
-        });
-        eventBus = vertx.eventBus();
-        eventBus.consumer("nacos renew", message -> {
-            System.out.println("nacos renew----------->" + message.toString());
-            try {
-                nacosConfig = new Properties();
-                nacosConfig.load(new StringReader(message.body().toString()));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
-        eventBus.consumer("init success", message -> {
-            System.out.println("check init success----------->");
-            try {
-                nacosConfig = new Properties();
-                nacosConfig.load(new StringReader(message.body().toString()));
-            } catch (IOException e) {
-                e.printStackTrace();
             }
         });
     }
@@ -226,11 +212,136 @@ public class ApiVerticle  extends AbstractVerticle {
                                 .putHeader("content-type", "application/json")
                                 .end(JsonObject.mapFrom(res.result()).toString());
                     } else {
-                        routingContext.fail(res.cause());
+                        log.info("",res.cause());
+                        routingContext.response().putHeader("content-type", "text/plain");
+                        routingContext.response().end(res.cause().getMessage());
                     }
                 });
             }).onFailure(err->{
-                routingContext.fail(err.getCause());
+                log.info("",err);
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end(err.getMessage());
+            });
+        });
+    }
+
+    private void redisPsubscribeKeyExpired(RoutingContext routingContext) {
+        String key = "abcdef";
+        String value = "test";
+        long interval = 5;
+        redisUtils.set(vertx,key,value);
+        redisUtils.psubscribeKeyExpired(vertx,key,value,interval,(AsyncResult<Message<JsonObject>> message) ->{
+            if (message.succeeded()) {
+                log.info("{} is expired,to do something here!",message.result().body().getString("key"));
+            } else {
+                log.error("",message.cause());
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end(message.cause().getMessage());
+            }
+        });
+        String responseMessage = "send successed!";
+        routingContext.response().putHeader("content-type", "text/plain");
+        routingContext.response().end(responseMessage);
+    }
+
+    private void redisSetNx(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            String value = json.getString("value");
+            Future<Boolean> future = redisUtils.setNx(vertx, key, value);
+            future.onComplete(handler->{
+                if (handler.succeeded()) {
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end(handler.result().toString());
+                } else {
+                    log.error("",handler.cause());
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end(handler.cause().getMessage());
+                }
+            });
+        });
+    }
+
+    private void redisGetSet(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            String value = json.getString("value");
+            Future<String> future = redisUtils.getSet(vertx, key, value);
+            future.onComplete(handler->{
+                if (handler.succeeded()) {
+                    if (handler.result() == null) {
+                        routingContext.response().putHeader("content-type", "text/plain");
+                        routingContext.response().end("不存在的key");
+                    } else {
+                        routingContext.response().putHeader("content-type", "text/plain");
+                        routingContext.response().end(handler.result());
+                    }
+                } else {
+                    log.error("",handler.cause());
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end(handler.cause().getMessage());
+                }
+            });
+        });
+    }
+
+    private void redisGet(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            String value = json.getString("value");
+            Future<String> future = redisUtils.get(vertx, key);
+            future.onComplete(handler->{
+                if (handler.succeeded()) {
+                    if (handler.result() == null) {
+                        routingContext.response().putHeader("content-type", "text/plain");
+                        routingContext.response().end("不存在的key");
+                    } else {
+                        routingContext.response().putHeader("content-type", "text/plain");
+                        routingContext.response().end(handler.result());
+                    }
+                } else {
+                    log.error("",handler.cause());
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end(handler.cause().getMessage());
+                }
+            });
+        });
+    }
+
+    private void redisSet(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            String value = json.getString("value");
+            redisUtils.set(vertx, key,value);
+            routingContext.response().putHeader("content-type", "text/plain");
+            routingContext.response().end("OK");
+        });
+    }
+
+    private void redisKeys(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            String value = json.getString("value");
+            Future<JsonArray> future = redisUtils.keys(vertx, key);
+            future.onComplete(handler->{
+                if (handler.succeeded()) {
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end(handler.result().toString());
+                } else {
+                    log.error("",handler.cause());
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end(handler.cause().getMessage());
+                }
             });
         });
     }

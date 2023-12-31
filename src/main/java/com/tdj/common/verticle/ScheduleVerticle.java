@@ -1,10 +1,9 @@
-package com.tdj.datacenter;
+package com.tdj.common.verticle;
 
-import com.tdj.datacenter.annotation.Scheduled;
-import com.tdj.datacenter.scheduling.TriggerContext;
-import com.tdj.datacenter.scheduling.support.CronTask;
-import com.tdj.datacenter.scheduling.support.CronTrigger;
-import com.tdj.datacenter.scheduling.support.SimpleTriggerContext;
+import com.tdj.common.annotation.Scheduled;
+import com.tdj.common.scheduling.support.CronTask;
+import com.tdj.common.scheduling.support.CronTrigger;
+import com.tdj.common.scheduling.support.SimpleTriggerContext;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import lombok.extern.slf4j.Slf4j;

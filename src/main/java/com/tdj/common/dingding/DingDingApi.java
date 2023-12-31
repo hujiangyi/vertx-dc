@@ -1,4 +1,4 @@
-package com.tdj.datacenter.dingding;
+package com.tdj.common.dingding;
 
 import com.dingtalk.api.DefaultDingTalkClient;
 import com.dingtalk.api.DingTalkClient;

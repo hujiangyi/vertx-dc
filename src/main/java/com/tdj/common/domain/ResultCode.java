@@ -1,4 +1,4 @@
-package com.tdj.datacenter.domain;
+package com.tdj.common.domain;
 
 public enum ResultCode implements IErrorCode {
     SUCCESS(200, "操作成功"),

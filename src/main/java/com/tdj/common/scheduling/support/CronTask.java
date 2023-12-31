@@ -1,6 +1,6 @@
-package com.tdj.datacenter.scheduling.support;
+package com.tdj.common.scheduling.support;
 
-import com.tdj.datacenter.annotation.Scheduled;
+import com.tdj.common.annotation.Scheduled;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 

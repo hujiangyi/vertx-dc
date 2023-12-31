@@ -1,10 +1,10 @@
-package com.tdj.datacenter.utils;
+package com.tdj.common.utils;
 
 import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.PropertyKeyConst;
 import com.alibaba.nacos.api.naming.NamingService;
 import com.alibaba.nacos.api.naming.pojo.Instance;
-import com.tdj.datacenter.annotation.FeignService;
+import com.tdj.common.annotation.FeignService;
 import feign.Request;
 import feign.VertxFeign;
 import feign.jackson.JacksonDecoder;

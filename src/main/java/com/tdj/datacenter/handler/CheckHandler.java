@@ -1,6 +1,6 @@
 package com.tdj.datacenter.handler;
 
-import com.tdj.datacenter.dingding.DingDingApiNew;
+import com.tdj.common.dingding.DingDingApiNew;
 import com.tdj.datacenter.domain.StockConfig;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;

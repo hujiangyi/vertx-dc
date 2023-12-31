@@ -1,5 +1,6 @@
 package com.tdj.datacenter;
 
+import com.tdj.common.BaseVerticle;
 import com.tdj.datacenter.handler.CheckHandler;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
@@ -9,12 +10,12 @@ import java.time.LocalTime;
 import java.util.Properties;
 
 @Slf4j
-public class CheckTestVerticle extends AbstractVerticle {
+public class CheckTestVerticle extends BaseVerticle {
     private Properties properties = new Properties();
     private CheckHandler checkHandler = new CheckHandler();
 
     @Override
-    public void start(Promise<Void> startPromise) {
+    public void doInit() {
         initStockConfig();
         vertx.setPeriodic(10000,timeId -> {
             LocalTime currentTime = LocalTime.now(); // 获取当前时间

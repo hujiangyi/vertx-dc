@@ -1,4 +1,4 @@
-package com.tdj.datacenter.dingding;
+package com.tdj.common.dingding;
 
 import com.aliyun.tea.TeaException;
 import com.aliyun.teautil.Common;

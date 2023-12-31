@@ -1,7 +1,7 @@
-package com.tdj.datacenter.scheduling.support;
+package com.tdj.common.scheduling.support;
 
 
-import com.tdj.datacenter.scheduling.TriggerContext;
+import com.tdj.common.scheduling.TriggerContext;
 
 import java.util.Date;
 

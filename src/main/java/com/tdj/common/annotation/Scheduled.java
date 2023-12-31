@@ -1,4 +1,4 @@
-package com.tdj.datacenter.annotation;
+package com.tdj.common.annotation;
 
 import java.lang.annotation.*;
 

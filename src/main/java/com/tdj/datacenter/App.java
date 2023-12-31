@@ -1,38 +1,127 @@
 package com.tdj.datacenter;
 
+import com.tdj.common.Contact;
+import com.tdj.common.annotation.Dao;
+import com.tdj.common.annotation.Utils;
+import com.tdj.common.verticle.NacosVerticle;
+import com.tdj.common.verticle.RedisVerticle;
 import io.vertx.config.ConfigRetriever;
 import io.vertx.config.ConfigRetrieverOptions;
 import io.vertx.config.ConfigStoreOptions;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
+import lombok.extern.slf4j.Slf4j;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.util.*;
+
+@Slf4j
 public class App {
-    private static Vertx vertx;
-    public static Vertx getVertxInstance(){
-        return vertx;
-    }
     public static void main(String[] args) {
-        vertx = Vertx.vertx();
+        Contact.setVertxInstance(Vertx.vertx());
         ConfigRetrieverOptions options = new ConfigRetrieverOptions()
             .addStore(new ConfigStoreOptions()
                 .setType("file")
                 .setFormat("properties")
                 .setOptional(true)
-                .setConfig(new JsonObject().put("path", "config.properties"))
+                .setConfig(new JsonObject().put("path", "config_local.properties"))
             );
-        ConfigRetriever retriever = ConfigRetriever.create(vertx, options);
+        ConfigRetriever retriever = ConfigRetriever.create(Contact.getVertxInstance(), options);
         retriever.getConfig(ar -> {
-            if (ar.failed()) {
-                // 处理获取配置失败的情况
-            } else {
+            if (ar.succeeded()) {
+                try {
+                    List<Class> annotations = new ArrayList<>();
+                    annotations.add(Dao.class);
+                    annotations.add(Utils.class);
+                    Map<Class,List<Class>> clazzs = findByAnnotations("com.tdj",annotations);
+                    for (Class annotation: clazzs.keySet()) {
+                        String name = annotation.getName();
+                        List<Class> list = clazzs.get(annotation);
+                        for (Class clazz : list) {
+                            Map<Class,Object> map = new HashMap<>();
+                            if (Contact.beanMap.containsKey(name)) {
+                                map = Contact.beanMap.get(name);
+                            } else {
+                                Contact.beanMap.put(name,map);
+                            }
+                            map.put(clazz,clazz.newInstance());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("" , e);
+                }
                 DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(ar.result());
-                vertx.deployVerticle(new NacosVerticle(),deploymentOptions);
-                vertx.deployVerticle(new CheckVerticle(),deploymentOptions);
-                vertx.deployVerticle(new ApiVerticle(),deploymentOptions);
-//                vertx.deployVerticle(new ScheduleVerticle(),deploymentOptions);
-//                vertx.deployVerticle(new CheckTestVerticle(),deploymentOptions);
+                Contact.getVertxInstance().deployVerticle(new NacosVerticle(),deploymentOptions);
+                Contact.getVertxInstance().deployVerticle(new RedisVerticle(),deploymentOptions);
+//                Contact.getVertxInstance().deployVerticle(new CheckVerticle(),deploymentOptions);
+                Contact.getVertxInstance().deployVerticle(new ApiVerticle(),deploymentOptions);
+//                Contact.getVertxInstance().deployVerticle(new ScheduleVerticle(),deploymentOptions);
+//                Contact.getVertxInstance().deployVerticle(new CheckTestVerticle(),deploymentOptions);
             }
         });
+    }
+
+    public static Map<Class,List<Class>> findByAnnotations(String basePackage,List<Class> annotations) throws IOException, ClassNotFoundException {
+        Map<Class,List<Class>> clazzs = new HashMap<>();
+        findAndAddByAnnotations(basePackage, clazzs,annotations);
+        return clazzs;
+    }
+
+    private static void findAndAddByAnnotations(String basePackage, Map<Class,List<Class>> clazzs,List<Class> annotations) throws IOException, ClassNotFoundException {
+        String path = basePackage.replace('.', '/');
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        Enumeration<URL> resources = classLoader.getResources(path);
+
+        while (resources.hasMoreElements()) {
+            URL resource = resources.nextElement();
+            String protocol = resource.getProtocol();
+
+            if ("file".equals(protocol)) {
+                // 处理普通文件系统中的类
+                String packagePath = resource.getPath();
+                clazzs.putAll(findScheduledMethodsInPackage(basePackage, packagePath, classLoader,annotations));
+            }
+            // 可以添加其他处理不同协议的逻辑，例如处理 jar 文件中的类
+        }
+    }
+
+    private static Map<Class,List<Class>> findScheduledMethodsInPackage(String basePackage, String packagePath, ClassLoader classLoader,List<Class> annotations) throws ClassNotFoundException, IOException {
+        Map<Class,List<Class>> clazzs = new HashMap<>();
+        File packageDir = new File(packagePath);
+
+        if (!packageDir.exists() || !packageDir.isDirectory()) {
+            return clazzs;
+        }
+
+        File[] classFiles = packageDir.listFiles(file -> file.isFile() && file.getName().endsWith(".class"));
+        for (File classFile : classFiles) {
+            String className = basePackage + "." + classFile.getName().substring(0, classFile.getName().length() - 6);
+            // 使用反射加载类
+            Class<?> clazz = classLoader.loadClass(className);
+            List<Class> list = new ArrayList<>();
+            for (Class annotation:annotations) {
+                if (clazz.isAnnotationPresent(annotation)) {
+                    if (clazzs.containsKey(annotation)) {
+                        list = clazzs.get(annotation);
+                    } else {
+                        clazzs.put(annotation,list);
+                    }
+                } else {
+                    continue;
+                }
+            }
+            list.add(clazz);
+        }
+
+        // 递归查找子包下的类
+        File[] subDirectories = packageDir.listFiles(File::isDirectory);
+        for (File subDirectory : subDirectories) {
+            String subPackageName = basePackage + "." + subDirectory.getName();
+            findAndAddByAnnotations(subPackageName, clazzs,annotations);
+        }
+        return clazzs;
     }
 }
