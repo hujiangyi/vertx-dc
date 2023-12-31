@@ -8,27 +8,37 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.Serializable;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-
 @Utils
 @Slf4j
 public class RedisUtils {
-    public void set(Vertx vertx, String key, String value){
+    public Future<Void> set(Vertx vertx, String key, String value){
+        Promise<Void> promise = Promise.promise();
         JsonObject body = new JsonObject();
         body.put("key",key);
         body.put("value",value);
-        vertx.eventBus().send("redis.set",body);
+        vertx.eventBus().request("redis.set",body, (AsyncResult<Message<Void>> handler) ->{
+            if (handler.succeeded()){
+                promise.complete(null);
+            } else {
+                promise.fail(handler.cause());
+            }
+        });
+        return promise.future();
     }
-    public void setEx(Vertx vertx, String key,long interval, String value){
+    public Future<Void> setEx(Vertx vertx, String key,long interval, String value){
+        Promise<Void> promise = Promise.promise();
         JsonObject body = new JsonObject();
         body.put("key",key);
         body.put("value",value);
         body.put("interval",interval);
-        vertx.eventBus().send("redis.setex",body);
+        vertx.eventBus().request("redis.setex",body, (AsyncResult<Message<Void>> handler) ->{
+            if (handler.succeeded()){
+                promise.complete(null);
+            } else {
+                promise.fail(handler.cause());
+            }
+        });
+        return promise.future();
     }
     public Future<Boolean> setNx(Vertx vertx, String key, String value){
         Promise<Boolean> promise = Promise.promise();
@@ -69,8 +79,16 @@ public class RedisUtils {
         });
         return promise.future();
     }
-    public void del(Vertx vertx, String key){
-        vertx.eventBus().send("redis.del",key);
+    public Future<Void> del(Vertx vertx, String key){
+        Promise<Void> promise = Promise.promise();
+        vertx.eventBus().request("redis.del",key, (AsyncResult<Message<Void>> handler) ->{
+            if (handler.succeeded()){
+                promise.complete(null);
+            } else {
+                promise.fail(handler.cause());
+            }
+        });
+        return promise.future();
     }
     public Future<JsonArray> keys(Vertx vertx, String prefix){
         Promise<JsonArray> promise = Promise.promise();
@@ -83,11 +101,20 @@ public class RedisUtils {
         });
         return promise.future();
     }
-    public void psubscribeKeyExpired(Vertx vertx, String key, String value, long interval, Handler<AsyncResult<Message<JsonObject>>> replyHandler) {
+    public Future<String> psubscribeKeyExpired(Vertx vertx, String key, String value, long interval) {
+        Promise<String> promise = Promise.promise();
         JsonObject body = new JsonObject();
         body.put("key",key);
         body.put("value",value);
-        vertx.eventBus().request("redis.psubscribe_key_expired",body, replyHandler);
+        body.put("interval",interval);
+        vertx.eventBus().request("redis.psubscribe_key_expired",body, (AsyncResult<Message<String>> handler) ->{
+            if(handler.succeeded()) {
+                promise.complete(handler.result().body());
+            } else {
+                promise.fail(handler.cause());
+            }
+        });
+        return promise.future();
     }
 
     /**

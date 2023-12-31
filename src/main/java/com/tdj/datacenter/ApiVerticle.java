@@ -229,19 +229,21 @@ public class ApiVerticle  extends BaseVerticle {
         String key = "abcdef";
         String value = "test";
         long interval = 5;
-        redisUtils.set(vertx,key,value);
-        redisUtils.psubscribeKeyExpired(vertx,key,value,interval,(AsyncResult<Message<JsonObject>> message) ->{
+        redisUtils.setEx(vertx,key,interval,value);
+//        redisUtils.del(vertx,key);
+        Future<String> future = redisUtils.psubscribeKeyExpired(vertx,key,value,interval);
+        future.onComplete(message ->{
             if (message.succeeded()) {
-                log.info("{} is expired,to do something here!",message.result().body().getString("key"));
+                log.info("{} is expired,to do something here!",message.result());
+                String responseMessage = "检测到" + message.result() + "的超时事件";
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end(responseMessage);
             } else {
-                log.error("",message.cause());
+                log.error("redisPsubscribeKeyExpired error>",message.cause());
                 routingContext.response().putHeader("content-type", "text/plain");
                 routingContext.response().end(message.cause().getMessage());
             }
         });
-        String responseMessage = "send successed!";
-        routingContext.response().putHeader("content-type", "text/plain");
-        routingContext.response().end(responseMessage);
     }
 
     private void redisSetNx(RoutingContext routingContext) {
