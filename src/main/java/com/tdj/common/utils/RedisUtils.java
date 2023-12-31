@@ -3,10 +3,11 @@ package com.tdj.common.utils;
 import com.alibaba.nacos.common.utils.StringUtils;
 import com.tdj.common.ModuleInit;
 import com.tdj.common.annotation.Utils;
-import io.vertx.core.*;
-import io.vertx.core.eventbus.Message;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
-import io.vertx.core.json.JsonObject;
 import io.vertx.redis.client.*;
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,26 +19,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Utils
 @Slf4j
 public class RedisUtils implements ModuleInit {
+    private final AtomicBoolean CONNECTING = new AtomicBoolean();
     private final int MAX_RECONNECT_RETRIES = 16;
     private Vertx vertx;
     private Properties config;
+    private Redis redis;
     private RedisAPI api;
 
     public Future<Boolean> init(Vertx vertx, Properties config){
+        log.info("redis init.");
         Promise<Boolean> promise = Promise.promise();
         this.vertx = vertx;
         this.config = config;
-        Future<RedisConnection> future = createRedisClient(vertx,config);
+        Future<RedisConnection> future = createNormalRedisClient();
         future.onComplete(handler->{
             RedisConnection client = future.result();
             client.exceptionHandler(response->{
                 log.error("redis 异常断线！" , response.getCause());
-                attemptReconnect(vertx, config, 0);
+                attemptReconnect(0);
             }).endHandler(response->{
                 log.error("redis 掉线！");
-                attemptReconnect(vertx, config, 0);
+                attemptReconnect(0);
             });
             api = RedisAPI.api(client);
+            log.info("redis init success!");
             promise.complete(true);
         }).onFailure(err->{
             log.error("redis 初始化异常！");
@@ -147,29 +152,18 @@ public class RedisUtils implements ModuleInit {
         });
         return promise.future();
     }
-    public Future<String> psubscribeKeyExpired(String key, String value, long interval) {
+    public Future<String> psubscribeKeyExpired(String key, long interval) {
         Promise<String> promise = Promise.promise();
-        JsonObject body = new JsonObject();
-        body.put("key",key);
-        body.put("value",value);
-        body.put("interval",interval);
-        vertx.eventBus().request("redis.psubscribe_key_expired",body, (AsyncResult<Message<String>> handler) ->{
-            if(handler.succeeded()) {
-                promise.complete(handler.result().body());
-            } else {
-                promise.fail(handler.cause());
-            }
-        });
-        Future<RedisConnection> future = createRedisClient(vertx,config);
+        Future<RedisConnection> future = createNewRedisClient();
         future.onComplete(complet->{
             final long timerId;
             RedisConnection client = future.result();
             final AtomicBoolean isTimeout = new AtomicBoolean(false);
-            //timer设置为interval + 10000 是为了避免边界异常
+            //timer设置为interval * 1000 + 10 是为了避免边界异常
             timerId = vertx.setTimer(interval + 10,timer->{
                 //未监听到超时事件，无需callback业务端，直接结束本次的连接
-                log.info("没有在间隔{}内收到{}的超时事件,主动关闭此次redis连接",interval,key);
-                promise.fail("超过最大等待时长，没有监听到{}的超时事件，主动退出监听");
+                log.info("没有在间隔{}ms内收到{}的超时事件,主动关闭此次redis连接",interval,key);
+                promise.fail("超过最大等待时长，没有监听到" + key + "的超时事件，主动退出监听");
                 synchronized (isTimeout) {
                     isTimeout.set(true);
                     client.close();
@@ -183,7 +177,7 @@ public class RedisUtils implements ModuleInit {
                             && resopnse.get(3).toString().equalsIgnoreCase(key) && !isTimeout.get()) {
                         //收到了过期事件，需要callback业务端处理此事件
                         promise.complete(resopnse.get(3).toString());
-                        log.info("监听到{}的超时事件，取消边界检查器",interval);
+                        log.info("监听到{}的超时事件，取消边界检查器",key);
                         vertx.cancelTimer(timerId);
                         client.close();
                     }
@@ -194,11 +188,11 @@ public class RedisUtils implements ModuleInit {
             args.add("__keyevent@*__:expired");
             api.psubscribe(args, handler->{
                 if (handler.succeeded()) {
-                    log.info("psubscribe 设置成功");
+                    log.info("psubscribe set success");
                 }
             });
         }).onFailure(err->{
-            promise.fail("建立redis连接失败");
+            promise.fail("redis connect faild!");
         });
         return promise.future();
     }
@@ -242,35 +236,66 @@ public class RedisUtils implements ModuleInit {
         return del(key);
     }
 
-    private Future<RedisConnection> createRedisClient(Vertx vertx, Properties config) {
+    private Future<RedisConnection> createNewRedisClient() {
         Promise<RedisConnection> promise = Promise.promise();
         RedisOptions redisOptions = new RedisOptions()
                 .addConnectionString(config.getProperty("redis.host"))
                 .setType(RedisClientType.STANDALONE);
-        Redis redis = Redis.createClient(vertx,redisOptions);
+        log.info("redis NetClientOptions is {}" ,redisOptions.getNetClientOptions().toJson());
+        redis = Redis.createClient(vertx,redisOptions);
         redis.connect(handler->{
             if (handler.succeeded()) {
                 RedisConnection client = handler.result();
                 promise.complete(client);
+                CONNECTING.set(false);
             } else if (handler.failed()) {
                 promise.fail(handler.cause());
+                CONNECTING.set(false);
             }
         });
+        return promise.future();
+    }
+
+    private Future<RedisConnection> createNormalRedisClient() {
+        Promise<RedisConnection> promise = Promise.promise();
+        RedisOptions redisOptions = new RedisOptions()
+                .addConnectionString(config.getProperty("redis.host"))
+                .setType(RedisClientType.STANDALONE);
+        log.info("redis NetClientOptions is {}" ,redisOptions.getNetClientOptions().toJson());
+        if (redis != null) {
+            redis.close();;
+        }
+        if (CONNECTING.compareAndSet(false, true)) {
+            redis = Redis.createClient(vertx,redisOptions);
+            redis.connect(handler->{
+                if (handler.succeeded()) {
+                    RedisConnection client = handler.result();
+                    promise.complete(client);
+                    CONNECTING.set(false);
+                } else if (handler.failed()) {
+                    promise.fail(handler.cause());
+                    CONNECTING.set(false);
+                }
+            });
+        } else {
+            promise.complete();
+        }
         return promise.future();
     }
 
     /**
      * Attempt to reconnect up to MAX_RECONNECT_RETRIES
      */
-    private void attemptReconnect(Vertx vertx,Properties config,int retry) {
-        if (retry < MAX_RECONNECT_RETRIES) {
+    private void attemptReconnect(int retry) {
+        if (retry > MAX_RECONNECT_RETRIES) {
+            CONNECTING.set(false);
+        } else {
             // retry with backoff up to 10240 ms
             long backoff = (long) (Math.pow(2, Math.min(retry, 10)) * 10);
 
             vertx.setTimer(backoff, timer -> {
-                createRedisClient(vertx,config).onFailure(t -> {
-                    attemptReconnect(vertx, config,retry + 1);
-                });
+                createNormalRedisClient()
+                    .onFailure(t -> attemptReconnect(retry + 1));
             });
         }
     }

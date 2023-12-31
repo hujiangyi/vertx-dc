@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 @Slf4j
 public class ApiVerticle  extends BaseVerticle {
@@ -230,19 +231,21 @@ public class ApiVerticle  extends BaseVerticle {
             String key = json.getString("key");
             String value = json.getString("value");
             long interval = json.getLong("interval");//秒
-            long offset = json.getLong("offset") * 1000;//秒
+            long offset = json.getLong("offset");//秒
             Future<Void> setExFuture = redisUtils.setEx(key, interval, value);
-            Future<String> psubscribeKeyExpiredFuture = redisUtils.psubscribeKeyExpired(key, value, interval);
+            Future<String> psubscribeKeyExpiredFuture = redisUtils.psubscribeKeyExpired(key, interval * 1000);
             setExFuture.onComplete(handler -> {
-                vertx.executeBlocking(run->{
-                    try {
-                        Thread.sleep(offset);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                vertx.executeBlocking(new Callable() {
+                    @Override
+                    public Object call() throws Exception {
+                        try {
+                            Thread.sleep(offset * 1000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        redisUtils.del(key);
+                        return null;
                     }
-                    redisUtils.del(key);
-                },err->{
-
                 });
             });
             psubscribeKeyExpiredFuture.onComplete(message -> {

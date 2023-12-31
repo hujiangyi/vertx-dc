@@ -7,6 +7,7 @@ import com.alibaba.nacos.api.config.ConfigService;
 import com.alibaba.nacos.api.config.listener.Listener;
 import com.alibaba.nacos.api.naming.NamingService;
 import com.alibaba.nacos.api.naming.pojo.Instance;
+import com.tdj.datacenter.App;
 import io.vertx.core.AbstractVerticle;
 import lombok.extern.slf4j.Slf4j;
 
@@ -71,14 +72,15 @@ public class NacosVerticle extends AbstractVerticle {
             @Override
             public void receiveConfigInfo(String configInfo) {
                 try {
-                    vertx.eventBus().publish("nacos renew", configInfo);
+                    vertx.eventBus().publish("nacos.config_renew", configInfo);
                 } catch (Exception e) {
                     log.debug("读取配置失败 dataId[{}],group[{}]",dataId, group,e);
                 }
             }
         });
         String configInfo = configService.getConfig(dataId, group, 5000);
-        vertx.eventBus().publish("init success", configInfo);
+        App.initModule(vertx,configInfo);
+        vertx.eventBus().publish("nacos.config_init_success", configInfo);
     }
 
     @Override

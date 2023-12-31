@@ -18,8 +18,8 @@ public abstract class BaseVerticle extends AbstractVerticle {
     protected EventBus eventBus;
     public void start() {
         eventBus = vertx.eventBus();
-        eventBus.consumer("init success", message -> {
-            log.info("check init success----------->");
+        eventBus.consumer("nacos.config_init_success", message -> {
+            log.info("nacos config init success----------->");
             try {
                 nacosConfig = new Properties();
                 nacosConfig.load(new StringReader(message.body().toString()));
@@ -28,8 +28,8 @@ public abstract class BaseVerticle extends AbstractVerticle {
                 log.error("",e);
             }
         });
-        eventBus.consumer("nacos renew", message -> {
-            log.info("nacos renew----------->" + message.toString());
+        eventBus.consumer("nacos.config_renew", message -> {
+            log.info("nacos config renew----------->" + message.toString());
             try {
                 nacosConfig = new Properties();
                 nacosConfig.load(new StringReader(message.body().toString()));

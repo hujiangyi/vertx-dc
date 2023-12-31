@@ -57,16 +57,6 @@ public class App {
                 } catch (Exception e) {
                     log.error("" , e);
                 }
-                Vertx.vertx().eventBus().consumer("init success", message -> {
-                    log.info("nacos init success----------->");
-                    try {
-                        Properties nacosConfig = new Properties();
-                        nacosConfig.load(new StringReader(message.body().toString()));
-                        initModule(Vertx.vertx(),nacosConfig);
-                    } catch (IOException e) {
-                        log.error("",e);
-                    }
-                });
                 DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(ar.result());
                 Contact.getVertxInstance().deployVerticle(new NacosVerticle(),deploymentOptions);
 //                Contact.getVertxInstance().deployVerticle(new CheckVerticle(),deploymentOptions);
@@ -77,12 +67,19 @@ public class App {
         });
     }
 
-    private static void initModule(Vertx vertx, Properties nacosConfig) {
-        Future<Boolean> redis = initModule(vertx,nacosConfig, RedisUtils.class);
-        redis.onComplete(handler->{
-            log.info("All modules have been initialized and variable injection has begun.");
-            vertx.eventBus().send("init doInjection",null);
-        });
+    public static void initModule(Vertx vertx, String configInfo) {
+        log.info("start init modules.");
+        try {
+            Properties nacosConfig = new Properties();
+            nacosConfig.load(new StringReader(configInfo));
+            Future<Boolean> redis = initModule(vertx,nacosConfig, RedisUtils.class);
+            redis.onComplete(handler->{
+                log.info("All modules have been initialized and variable injection has begun.");
+                vertx.eventBus().send("init doInjection",null);
+            });
+        } catch (IOException e) {
+            log.error("",e);
+        }
     }
 
     private static Future<Boolean> initModule(Vertx vertx, Properties nacosConfig, Class clazz) {
