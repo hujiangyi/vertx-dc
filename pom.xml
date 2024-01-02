@@ -10,13 +10,16 @@
     <version>3.0</version>
 
     <properties>
-        <io.vertx.version>3.9.5</io.vertx.version>
+        <io.vertx.version>4.5.1</io.vertx.version>
         <com.alibaba.nacos.client.version>2.0.4</com.alibaba.nacos.client.version>
-        <org.projectlombok.version>1.18.12</org.projectlombok.version>
+        <org.projectlombok.version>1.18.24</org.projectlombok.version>
+        <org.slf4j.version>1.7.21</org.slf4j.version>
         <ch.qos.logback.version>1.2.6</ch.qos.logback.version>
         <com.aliyun.dingtalk.version>2.0.0</com.aliyun.dingtalk.version>
         <feign.version>11.9</feign.version>
         <hutool.version>5.4.0</hutool.version>
+        <mysql-connector.version>8.0.20</mysql-connector.version>
+        <io.agroal.version>1.16</io.agroal.version>
     </properties>
 
     <dependencies>
@@ -63,6 +66,11 @@
             <version>${io.vertx.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-jdbc-client</artifactId>
+            <version>${io.vertx.version}</version>
+        </dependency>
+        <dependency>
             <groupId>io.github.openfeign</groupId>
             <artifactId>feign-vertx</artifactId>
             <version>4.0.1</version>
@@ -90,6 +98,11 @@
             <version>${ch.qos.logback.version}</version>
         </dependency>
         <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${org.slf4j.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.aliyun</groupId>
             <artifactId>alibaba-dingtalk-service-sdk</artifactId>
             <version>${com.aliyun.dingtalk.version}</version>
@@ -114,6 +127,23 @@
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
             <version>${hutool.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql-connector.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.agroal</groupId>
+            <artifactId>agroal-api</artifactId>
+            <version>${io.agroal.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.agroal</groupId>
+            <artifactId>agroal-pool</artifactId>
+            <version>${io.agroal.version}</version>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 

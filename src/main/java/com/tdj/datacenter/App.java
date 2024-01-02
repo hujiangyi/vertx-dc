@@ -2,7 +2,7 @@ package com.tdj.datacenter;
 
 import com.tdj.common.Contact;
 import com.tdj.common.ModuleInit;
-import com.tdj.common.annotation.Dao;
+import com.tdj.common.annotation.mysql.Dao;
 import com.tdj.common.annotation.Utils;
 import com.tdj.common.utils.RedisUtils;
 import com.tdj.common.verticle.NacosVerticle;
@@ -63,6 +63,7 @@ public class App {
                 Contact.getVertxInstance().deployVerticle(new ApiVerticle(),deploymentOptions);
 //                Contact.getVertxInstance().deployVerticle(new ScheduleVerticle(),deploymentOptions);
 //                Contact.getVertxInstance().deployVerticle(new CheckTestVerticle(),deploymentOptions);
+//                Contact.getVertxInstance().deployVerticle(new TestVerticle(),deploymentOptions);
             }
         });
     }
@@ -73,7 +74,14 @@ public class App {
             Properties nacosConfig = new Properties();
             nacosConfig.load(new StringReader(configInfo));
             Future<Boolean> redis = initModule(vertx,nacosConfig, RedisUtils.class);
-            redis.onComplete(handler->{
+            for (Class clazz : Contact.beanMap.get(Dao.class.getName()).keySet()) {
+                Future<Boolean> future = initModule(vertx,nacosConfig,clazz);
+                redis = redis.compose(handler->{
+                    return future;
+                });
+            }
+            redis
+            .onComplete(handler->{
                 log.info("All modules have been initialized and variable injection has begun.");
                 vertx.eventBus().send("init doInjection",null);
             });

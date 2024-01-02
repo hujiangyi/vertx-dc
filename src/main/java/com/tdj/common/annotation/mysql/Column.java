@@ -1,12 +1,13 @@
-package com.tdj.common.annotation;
+package com.tdj.common.annotation.mysql;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Target({ElementType.TYPE})
+@Target({ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Dao {
-    String value() default "";
+public @interface Column {
+    String name() default "";
+    boolean primary() default false;
 }

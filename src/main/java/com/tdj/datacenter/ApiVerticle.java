@@ -3,11 +3,13 @@ package com.tdj.datacenter;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.tdj.common.BaseVerticle;
+import com.tdj.datacenter.dao.pojo.Test;
 import com.tdj.common.dingding.DingDingApi;
 import com.tdj.common.dingding.DingDingApiNew;
 import com.tdj.common.domain.Result;
 import com.tdj.common.utils.FeignUtils;
 import com.tdj.common.utils.RedisUtils;
+import com.tdj.datacenter.dao.MyTestDao;
 import com.tdj.datacenter.domain.EntUser;
 import com.tdj.datacenter.domain.Oauth2Token;
 import com.tdj.datacenter.domain.StockConfig;
@@ -37,6 +39,7 @@ public class ApiVerticle  extends BaseVerticle {
     private FeignUtils feignUtils = new FeignUtils();
     private CheckHandler checkHandler = new CheckHandler();
     private RedisUtils redisUtils;
+    private MyTestDao myTestDao;
 
     @Override
     public void doInit() {
@@ -61,6 +64,8 @@ public class ApiVerticle  extends BaseVerticle {
         router.post("/datacenter/redis/getset/").handler(this::redisGetSet);
         router.post("/datacenter/redis/getlock/").handler(this::redisGetLock);
         router.post("/datacenter/redis/dellock/").handler(this::redisDelLock);
+        router.post("/datacenter/mysql/select/").handler(this::mysqlSelect);
+        router.post("/datacenter/mysql/dotest/").handler(this::mysqlDoTest);
 
         // 将路由与服务器关联
         server.requestHandler(router);
@@ -399,6 +404,38 @@ public class ApiVerticle  extends BaseVerticle {
             redisUtils.delLock(key);
             routingContext.response().putHeader("content-type", "text/plain");
             routingContext.response().end("OK");
+        });
+    }
+
+    private void mysqlDoTest(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            myTestDao.doTest();
+            routingContext.response().putHeader("content-type", "text/plain");
+            routingContext.response().end("OK");
+        });
+    }
+    private void mysqlSelect(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            try {
+                JsonObject json = buffer.toJsonObject();
+                String sql = json.getString("sql");
+                JsonObject param1 = json.getJsonObject("param");
+                Test t = new Test();
+                t.setId(param1.getLong("id"));
+                Future<List<Test>> future = myTestDao.myFirstSelect(sql, t);
+                future.onSuccess(tests->{
+                    for (Test test : tests) {
+                        log.info(test.toString());
+                    }
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end("OK");
+                });
+            }catch (Exception e) {
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end("ERROR");
+            }
         });
     }
 }

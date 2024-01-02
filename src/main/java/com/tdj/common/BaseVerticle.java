@@ -1,6 +1,6 @@
 package com.tdj.common;
 
-import com.tdj.common.annotation.Dao;
+import com.tdj.common.annotation.mysql.Dao;
 import com.tdj.common.annotation.Utils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.EventBus;
