@@ -236,6 +236,20 @@ public class RedisUtils implements ModuleInit {
         return del(key);
     }
 
+    public Future<Boolean> exists(String key){
+        Promise<Boolean> promise = Promise.promise();
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        api.exists(args, response->{
+            if (response.succeeded()) {
+                promise.complete(response.result().toString().equalsIgnoreCase("1"));
+            } else {
+                promise.fail("exists error.");
+            }
+        });
+        return promise.future();
+    }
+
     private Future<RedisConnection> createNewRedisClient() {
         Promise<RedisConnection> promise = Promise.promise();
         RedisOptions redisOptions = new RedisOptions()
