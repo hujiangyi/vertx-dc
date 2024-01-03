@@ -71,6 +71,11 @@
             <version>${io.vertx.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-sql-client-templates</artifactId>
+            <version>${io.vertx.version}</version>
+        </dependency>
+        <dependency>
             <groupId>io.github.openfeign</groupId>
             <artifactId>feign-vertx</artifactId>
             <version>4.0.1</version>

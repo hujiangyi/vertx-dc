@@ -8,6 +8,7 @@ import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import io.vertx.redis.client.*;
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,14 +23,16 @@ public class RedisUtils implements ModuleInit {
     private final AtomicBoolean CONNECTING = new AtomicBoolean();
     private final int MAX_RECONNECT_RETRIES = 16;
     private Vertx vertx;
-    private Properties config;
+    private Properties nacosConfig;
+    private JsonObject config;
     private Redis redis;
     private RedisAPI api;
 
-    public Future<Boolean> init(Vertx vertx, Properties config){
+    public Future<Boolean> init(Vertx vertx, Properties nacosConfig, JsonObject config){
         log.info("redis init.");
         Promise<Boolean> promise = Promise.promise();
         this.vertx = vertx;
+        this.nacosConfig = nacosConfig;
         this.config = config;
         Future<RedisConnection> future = createNormalRedisClient();
         future.onComplete(handler->{
@@ -253,7 +256,7 @@ public class RedisUtils implements ModuleInit {
     private Future<RedisConnection> createNewRedisClient() {
         Promise<RedisConnection> promise = Promise.promise();
         RedisOptions redisOptions = new RedisOptions()
-                .addConnectionString(config.getProperty("redis.host"))
+                .addConnectionString(nacosConfig.getProperty("redis.host"))
                 .setType(RedisClientType.STANDALONE);
         log.info("redis NetClientOptions is {}" ,redisOptions.getNetClientOptions().toJson());
         redis = Redis.createClient(vertx,redisOptions);
@@ -273,7 +276,7 @@ public class RedisUtils implements ModuleInit {
     private Future<RedisConnection> createNormalRedisClient() {
         Promise<RedisConnection> promise = Promise.promise();
         RedisOptions redisOptions = new RedisOptions()
-                .addConnectionString(config.getProperty("redis.host"))
+                .addConnectionString(nacosConfig.getProperty("redis.host"))
                 .setType(RedisClientType.STANDALONE);
         log.info("redis NetClientOptions is {}" ,redisOptions.getNetClientOptions().toJson());
         if (redis != null) {

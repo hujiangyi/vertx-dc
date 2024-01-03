@@ -14,13 +14,18 @@ import io.vertx.jdbcclient.JDBCPool;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.Tuple;
+import io.vertx.sqlclient.templates.RowMapper;
+import io.vertx.sqlclient.templates.SqlTemplate;
+import io.vertx.sqlclient.templates.TupleMapper;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,32 +39,30 @@ public abstract class BaseDao implements ModuleInit {
         List<Object> conditions = new ArrayList<>();
         conditions.add(16L);
         pool.preparedQuery(sql)
-            // the emp id to look up
-            .execute(Tuple.tuple(conditions))
-            .onFailure(e -> {
-                log.error("",e);
-            })
-            .onSuccess(rows -> {
-                for (Row row : rows) {
-                    System.out.println(row.getString("FIRST_NAME"));
-                }
-            });
+                // the emp id to look up
+                .execute(Tuple.tuple(conditions))
+                .onFailure(e -> {
+                    log.error("",e);
+                })
+                .onSuccess(rows -> {
+                    for (Row row : rows) {
+                        System.out.println(row.getString("FIRST_NAME"));
+                    }
+                });
     }
 
-    public Future<Boolean> init(Vertx vertx, Properties config){
+    public Future<Boolean> init(Vertx vertx, Properties nacosConfig, JsonObject config){
         log.info("mysql init.");
         Promise<Boolean> promise = Promise.promise();
-        pool = DBManager.getPool(vertx,config);
+        pool = DBManager.getPool(vertx,nacosConfig);
         try {
             List<String> injectNames = new ArrayList<>();
             injectNames.add("redisUtils");
-            for (Class clazz : Contact.beanMap.get(Dao.class.getName()).keySet()) {
-                Object obj = Contact.beanMap.get(Dao.class.getName()).get(clazz);
-                for (String name:injectNames) {
-                    Field field = clazz.getSuperclass().getDeclaredField(name);
-                    field.setAccessible(true);
-                    field.set(obj,Contact.beanMap.get(Utils.class.getName()).get(RedisUtils.class));
-                }
+            Object obj = Contact.beanMap.get(Dao.class.getName()).get(this.getClass());
+            for (String name:injectNames) {
+                Field field = this.getClass().getSuperclass().getDeclaredField(name);
+                field.setAccessible(true);
+                field.set(obj,Contact.beanMap.get(Utils.class.getName()).get(RedisUtils.class));
             }
             log.info("mysql init success!");
             promise.complete();
@@ -70,99 +73,58 @@ public abstract class BaseDao implements ModuleInit {
         return promise.future();
     }
 
-    public <T> Future<List<T>> select(String sql,Class<T> clazz) {
-        return select(sql,clazz,null);
-    }
-
-    public <T> Future<List<T>> select(String sql,T t) {
-        JsonObject params = new JsonObject();
-        Field[] fields = t.getClass().getDeclaredFields();
-        for (Field field : fields) {
-            try {
-                field.setAccessible(true);
-                Object obj = field.get(t);
-                if (obj != null) {
-                    params.put(field.getName(), obj);
-                }
-            } catch (Exception e) {
-                log.trace("",e);
-            }
-        }
-        return select(sql,(Class<T>) t.getClass(),params);
-    }
-
-    public <T> Future<List<T>> select(String sql, Class<T> clazz, JsonObject params) {
-        List<String> args = extractArgs(sql);
-        List<Object> conditions = new ArrayList<>();
+    public <T extends Mapper<T>> Future<T> selectOne(String sql,Class<T> clazz) {
         try {
-            for (String arg : args) {
-                if (params != null && params.containsKey(arg)) {
-                    conditions.add(params.getValue(arg));
+            T t = clazz.newInstance();
+            return select(sql,t, t.paramMapper(), t.resultMappper()).compose(list ->{
+                if (list.isEmpty()) {
+                    return Future.succeededFuture(null);
+                } else {
+                    return Future.succeededFuture(list.get(0));
                 }
+            });
+        } catch (InstantiationException | IllegalAccessException e) {
+            return Future.failedFuture(e);
+        }
+    }
+    public <T extends Mapper<T>>  Future<T> selectOne(String sql,T t) {
+        return select(sql,t,t.paramMapper(),t.resultMappper()).compose(list->{
+            if (list.isEmpty()) {
+                return Future.succeededFuture(null);
+            } else {
+                return Future.succeededFuture(list.get(0));
             }
-            sql = sql.replaceAll("#\\{.*\\}", "'?'");
-            sql = sql.replaceAll("\\$\\{.*\\}", "?");
-            Future<RowSet<Row>> rowSetFuture = pool.preparedQuery(sql).execute(Tuple.tuple(conditions));
-            return fromRowSet(rowSetFuture,clazz);
+        });
+    }
+
+    public <T extends Mapper<T>>  Future<List<T>> select(String sql,Class<T> clazz) {
+        try {
+            T t = clazz.newInstance();
+            return select(sql, t, t.paramMapper(), t.resultMappper());
+        } catch (InstantiationException | IllegalAccessException e) {
+            return Future.failedFuture(e);
+        }
+    }
+
+    public <T extends Mapper<T>>  Future<List<T>> select(String sql,T t) {
+        return select(sql, t, t.paramMapper(), t.resultMappper());
+    }
+
+    public <T> Future<List<T>> select(String sql, T t, Function<T, Map<String, Object>> paramMapper, RowMapper<T> resultMappper) {
+        try {
+            Future<RowSet<T>> rowSetFuture = SqlTemplate.forQuery(pool,sql).mapTo(resultMappper)
+                    .mapFrom(TupleMapper.mapper(paramMapper)).execute(t);
+            return fromRowSet(rowSetFuture);
         } catch (SecurityException e) {
             return Future.failedFuture(e);
         }
     }
 
-    public <T> T fromRow(Row row,Class<T> clazz) throws InstantiationException, IllegalAccessException {
-        try {
-            T obj = clazz.newInstance();
-            Field[] fields = clazz.getDeclaredFields();
-            for (Field field : fields) {
-                ;
-                Annotation annotation = field.getAnnotation(Column.class);
-                if (annotation != null) {
-                    Column column = (Column) annotation;
-                    try {
-                        field.setAccessible(true);
-                        field.set(obj, row.get(field.getType(), column.name()));
-                    } catch (IllegalAccessException e) {
-                        log.error("", e);
-                    }
-                }
-            }
-            return obj;
-        } catch (InstantiationException | IllegalAccessException e) {
-            throw e;
-        }
-    }
-
-    private List<String> extractArgs(String sql) {
-        List<String> args = new ArrayList<>();
-        String regex = "#\\{([^}]+)}";
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(sql);
-        while (matcher.find()) {
-            // 提取括号内的内容（xxx）
-            String arg = matcher.group(1);
-            args.add(arg);
-        }
-        regex = "\\$\\{([^}]+)}";
-        pattern = Pattern.compile(regex);
-        matcher = pattern.matcher(sql);
-        while (matcher.find()) {
-            // 提取括号内的内容（xxx）
-            String arg = matcher.group(1);
-            args.add(arg);
-        }
-        return args;
-    }
-
-    private <T> Future<List<T>> fromRowSet(Future<RowSet<Row>> rowSetFuture,Class<T> clazz) {
+    private <T> Future<List<T>> fromRowSet(Future<RowSet<T>> rowSetFuture) {
         List<T> list = new ArrayList<>();
         return rowSetFuture.compose(rows -> {
-            for (Row row : rows) {
-                try {
-                    T t = BaseDao.this.fromRow(row, clazz);
-                    list.add(t);
-                } catch (Exception e) {
-                    return Future.failedFuture(e);
-                }
+            for (T t : rows) {
+                list.add(t);
             }
             return Future.succeededFuture(list);
         });

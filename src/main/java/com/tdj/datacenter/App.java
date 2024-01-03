@@ -68,14 +68,14 @@ public class App {
         });
     }
 
-    public static void initModule(Vertx vertx, String configInfo) {
+    public static void initModule(Vertx vertx, String configInfo,JsonObject config) {
         log.info("start init modules.");
         try {
             Properties nacosConfig = new Properties();
             nacosConfig.load(new StringReader(configInfo));
-            Future<Boolean> redis = initModule(vertx,nacosConfig, RedisUtils.class);
+            Future<Boolean> redis = initModule(vertx,nacosConfig,config, RedisUtils.class);
             for (Class clazz : Contact.beanMap.get(Dao.class.getName()).keySet()) {
-                Future<Boolean> future = initModule(vertx,nacosConfig,clazz);
+                Future<Boolean> future = initModule(vertx,nacosConfig,config,clazz);
                 redis = redis.compose(handler->{
                     return future;
                 });
@@ -90,13 +90,13 @@ public class App {
         }
     }
 
-    private static Future<Boolean> initModule(Vertx vertx, Properties nacosConfig, Class clazz) {
+    private static Future<Boolean> initModule(Vertx vertx, Properties nacosConfig,JsonObject config, Class clazz) {
         Annotation[] annotations = clazz.getDeclaredAnnotations();
         for (Annotation annotation:annotations) {
             if (annotation instanceof Dao || annotation instanceof Utils) {
                 try{
                     ModuleInit moduleInit = (ModuleInit) Contact.beanMap.get(annotation.annotationType().getName()).get(clazz);
-                    return moduleInit.init(vertx,nacosConfig);
+                    return moduleInit.init(vertx,nacosConfig,config);
                 } catch (Exception e) {
                     log.error("",e);
                 }

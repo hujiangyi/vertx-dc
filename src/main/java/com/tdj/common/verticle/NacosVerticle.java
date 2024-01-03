@@ -79,7 +79,7 @@ public class NacosVerticle extends AbstractVerticle {
             }
         });
         String configInfo = configService.getConfig(dataId, group, 5000);
-        App.initModule(vertx,configInfo);
+        App.initModule(vertx,configInfo,config());
         vertx.eventBus().publish("nacos.config_init_success", configInfo);
     }
 
