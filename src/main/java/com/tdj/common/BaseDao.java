@@ -1,10 +1,12 @@
-package com.tdj.common.mysql;
+package com.tdj.common;
 
 import com.tdj.common.Contact;
 import com.tdj.common.ModuleInit;
 import com.tdj.common.annotation.Utils;
 import com.tdj.common.annotation.mysql.Column;
 import com.tdj.common.annotation.mysql.Dao;
+import com.tdj.common.mysql.DBManager;
+import com.tdj.common.mysql.Mapper;
 import com.tdj.common.utils.RedisUtils;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -52,7 +54,8 @@ public abstract class BaseDao implements ModuleInit {
     }
 
     public Future<Boolean> init(Vertx vertx, Properties nacosConfig, JsonObject config){
-        log.info("mysql init.");
+        String className = this.getClass().getName();
+        log.info("{} init.", className);
         Promise<Boolean> promise = Promise.promise();
         pool = DBManager.getPool(vertx,nacosConfig);
         try {
@@ -64,16 +67,16 @@ public abstract class BaseDao implements ModuleInit {
                 field.setAccessible(true);
                 field.set(obj,Contact.beanMap.get(Utils.class.getName()).get(RedisUtils.class));
             }
-            log.info("mysql init success!");
+            log.info("{} init success!", className);
             promise.complete();
         } catch (NoSuchFieldException | IllegalAccessException e) {
-            log.error("mysql init faild!",e);
+            log.error("{} init faild!", className, e);
             promise.fail(e);
         }
         return promise.future();
     }
 
-    public <T extends Mapper<T>> Future<T> selectOne(String sql,Class<T> clazz) {
+    public <T extends Mapper<T>> Future<T> selectOne(String sql, Class<T> clazz) {
         try {
             T t = clazz.newInstance();
             return select(sql,t, t.paramMapper(), t.resultMappper()).compose(list ->{

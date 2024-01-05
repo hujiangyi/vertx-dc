@@ -1,5 +1,6 @@
 package com.tdj.common;
 
+import com.tdj.common.annotation.Component;
 import com.tdj.common.annotation.mysql.Dao;
 import com.tdj.common.annotation.Utils;
 import io.vertx.core.AbstractVerticle;
@@ -50,7 +51,7 @@ public abstract class BaseVerticle extends AbstractVerticle {
             Class<?> type = field.getType();
             Annotation[] annotations = type.getDeclaredAnnotations();
             for (Annotation annotation:annotations) {
-                if (annotation instanceof Dao || annotation instanceof Utils) {
+                if (annotation instanceof Component || annotation instanceof Dao || annotation instanceof Utils) {
                     field.setAccessible(true);
                     try {
                         field.set(this, Contact.beanMap.get(annotation.annotationType().getName()).get(type));

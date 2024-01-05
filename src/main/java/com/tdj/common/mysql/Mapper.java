@@ -6,6 +6,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 public abstract class Mapper<T> {
-    protected abstract RowMapper<T> resultMappper();
-    protected abstract Function<T, Map<String, Object>> paramMapper();
+    public abstract RowMapper<T> resultMappper();
+    public abstract Function<T, Map<String, Object>> paramMapper();
 }

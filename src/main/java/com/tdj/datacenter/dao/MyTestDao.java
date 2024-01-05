@@ -1,7 +1,7 @@
 package com.tdj.datacenter.dao;
 
 import com.tdj.common.annotation.mysql.Dao;
-import com.tdj.common.mysql.BaseDao;
+import com.tdj.common.BaseDao;
 import com.tdj.datacenter.dao.pojo.Test;
 import io.vertx.core.Future;
 

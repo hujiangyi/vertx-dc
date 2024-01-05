@@ -2,6 +2,7 @@ package com.tdj.datacenter;
 
 import com.tdj.common.Contact;
 import com.tdj.common.ModuleInit;
+import com.tdj.common.annotation.Component;
 import com.tdj.common.annotation.mysql.Dao;
 import com.tdj.common.annotation.Utils;
 import com.tdj.common.utils.RedisUtils;
@@ -39,6 +40,7 @@ public class App {
                 try {
                     List<Class> annotations = new ArrayList<>();
                     annotations.add(Dao.class);
+                    annotations.add(Component.class);
                     annotations.add(Utils.class);
                     Map<Class,List<Class>> clazzs = findByAnnotations("com.tdj",annotations);
                     for (Class annotation: clazzs.keySet()) {
@@ -73,17 +75,19 @@ public class App {
         try {
             Properties nacosConfig = new Properties();
             nacosConfig.load(new StringReader(configInfo));
-            Future<Boolean> redis = initModule(vertx,nacosConfig,config, RedisUtils.class);
-            for (Class clazz : Contact.beanMap.get(Dao.class.getName()).keySet()) {
-                Future<Boolean> future = initModule(vertx,nacosConfig,config,clazz);
-                redis = redis.compose(handler->{
-                    return future;
-                });
+            List<Future<Boolean>> list = new ArrayList<>();
+            list.add(initModule(vertx,nacosConfig,config, RedisUtils.class));
+            for (Class clazz : Contact.beanMap.get(Component.class.getName()).keySet()) {
+                list.add(initModule(vertx,nacosConfig,config,clazz));
             }
-            redis
-            .onComplete(handler->{
+            for (Class clazz : Contact.beanMap.get(Dao.class.getName()).keySet()) {
+                list.add(initModule(vertx,nacosConfig,config,clazz));
+            }
+            Future.join(list).onSuccess(handler->{
                 log.info("All modules have been initialized and variable injection has begun.");
-                vertx.eventBus().send("init doInjection",null);
+                vertx.eventBus().publish("init doInjection",null);
+            }).onFailure(err->{
+                log.info("Init failed.",err);
             });
         } catch (IOException e) {
             log.error("",e);

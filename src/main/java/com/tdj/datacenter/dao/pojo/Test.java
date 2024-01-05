@@ -22,7 +22,7 @@ public class Test extends Mapper<Test> {
     private LocalDateTime time;
 
     @Override
-    protected RowMapper<Test> resultMappper() {
+    public RowMapper<Test> resultMappper() {
         return row -> {
             Test test = new Test();
             test.id = row.getLong("id");
@@ -34,7 +34,7 @@ public class Test extends Mapper<Test> {
     }
 
     @Override
-    protected Function<Test, Map<String, Object>> paramMapper() {
+    public Function<Test, Map<String, Object>> paramMapper() {
         return test -> {
             Map<String, Object> parameters = new HashMap<>();
             parameters.put("id", test.id);
