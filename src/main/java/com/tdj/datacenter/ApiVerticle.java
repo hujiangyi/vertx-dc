@@ -3,6 +3,7 @@ package com.tdj.datacenter;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.tdj.common.BaseVerticle;
+import com.tdj.datacenter.constant.RedisKeyConstants;
 import com.tdj.datacenter.dao.pojo.Test;
 import com.tdj.common.dingding.DingDingApi;
 import com.tdj.common.dingding.DingDingApiNew;
@@ -15,8 +16,11 @@ import com.tdj.datacenter.domain.Oauth2Token;
 import com.tdj.datacenter.domain.StockConfig;
 import com.tdj.datacenter.feign.PlatformService;
 import com.tdj.datacenter.handler.CheckHandler;
+import com.tdj.datacenter.lua.RedisScriptsConstants;
+import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonArray;
@@ -30,7 +34,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class ApiVerticle  extends BaseVerticle {
@@ -64,6 +70,7 @@ public class ApiVerticle  extends BaseVerticle {
         router.post("/datacenter/redis/getset/").handler(this::redisGetSet);
         router.post("/datacenter/redis/getlock/").handler(this::redisGetLock);
         router.post("/datacenter/redis/dellock/").handler(this::redisDelLock);
+        router.post("/datacenter/redis/eval/").handler(this::redisEval);
         router.post("/datacenter/mysql/select/").handler(this::mysqlSelect);
         router.post("/datacenter/mysql/dotest/").handler(this::mysqlDoTest);
 
@@ -404,6 +411,107 @@ public class ApiVerticle  extends BaseVerticle {
             redisUtils.delLock(key);
             routingContext.response().putHeader("content-type", "text/plain");
             routingContext.response().end("OK");
+        });
+    }
+    private void redisEval(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            Long expire = json.getLong("expire");
+            Long timeout = json.getLong("timeout");
+            Boolean forceRenew = json.getBoolean("force_renew");
+            Boolean ordered = json.getBoolean("ordered");
+
+            //eval test
+//            TimeUnit unit = TimeUnit.HOURS;
+//            List<String> args = new ArrayList<>();
+//            args.add(RedisScriptsConstants.SERIAL_NUMBER);
+//            args.add("1");
+//            args.add(RedisKeyConstants.SERIAL_NUMBER_PREFIX);
+//            args.add("" + unit.toMillis(expire));
+//            log.info("eval args:{}" ,JsonArray.of(args));
+//            Future<String> future = redisUtils.eval(args);
+//            future.onComplete(handler->{
+//                routingContext.response().putHeader("content-type", "text/plain");
+//                routingContext.response().end(handler.result().toString());
+//            }).onFailure(err->{
+//                log.error("",err.getCause());
+//                routingContext.response().putHeader("content-type", "text/plain");
+//                routingContext.response().end(err.getMessage());
+//            });
+
+            //lockReentrantV2 test
+            Context context = redisUtils.getTransactionContext(false);
+            log.info(">>>>context_str1:{}",context);
+            redisUtils.lockReentrantV2(context, key,expire, TimeUnit.SECONDS,timeout).compose(lock -> {
+                if (lock) {
+                    return redisUtils.get("abc");
+                } else {
+                    log.info(">>>>str1 is locked");
+                    return Future.failedFuture("");
+                }
+            }).compose(str ->{
+                log.info(">>>>str1:{}",str);
+//                Context otherContext = redisUtils.getTransactionContext(forceRenew);
+//                log.info(">>>>context_str2:{}",otherContext);
+                return redisUtils.lockReentrantV2(context, key,expire, TimeUnit.SECONDS,timeout).compose(lock->{
+                    if (lock) {
+                        return redisUtils.get("abcd");
+                    } else {
+                        log.info(">>>>str2 is locked");
+                        return Future.failedFuture("");
+                    }
+                }).onSuccess(str2->{
+                    log.info(">>>>unlock str2:{}",str2);
+                    redisUtils.unlockReentrant(context,key);
+                }).onFailure(err->{
+                    log.info(">>>>unlock err2:{}",err.getMessage());
+                    redisUtils.unlockReentrant(context, key);
+                });
+            }).onSuccess(b ->{
+                redisUtils.unlockReentrant(context,key).onSuccess(b2->{
+                    vertx.executeBlocking((Callable<Void>) ()->{
+                        try {
+                            Context otherContext = redisUtils.getTransactionContext(forceRenew);
+                            log.info(">>>>context_str3:{}",otherContext);
+                            redisUtils.lockReentrantV2(otherContext, key,expire, TimeUnit.SECONDS,timeout).compose(lock -> {
+                                if (lock) {
+                                    return redisUtils.get("abc");
+                                } else {
+                                    log.info(">>>>str3 is locked");
+                                    return Future.failedFuture("");
+                                }
+                            }).compose(str ->{
+                                log.info(">>>>str3:{}",str);
+                                return redisUtils.lockReentrantV2(otherContext, key,expire, TimeUnit.SECONDS,timeout);
+                            }).compose(lock->{
+                                if (lock) {
+                                    return redisUtils.get("abcd");
+                                } else {
+                                    log.info(">>>>str4 is locked");
+                                    return Future.failedFuture("");
+                                }
+                            }).onComplete(handler->{
+                                redisUtils.unlockReentrant(otherContext,key);
+                                redisUtils.unlockReentrant(otherContext, key);
+                            }).onSuccess(str ->{
+                                log.info(">>>>str4:{}",str);
+                            }).onFailure(err->{
+                                log.info(">>>>err2:{}",err.getMessage());
+                            });
+                            routingContext.response().putHeader("content-type", "text/plain");
+                            routingContext.response().end("OK");
+                        } catch (Exception e) {
+                            log.error("",e);
+                        }
+                        return null;
+                    },ordered);
+                });
+            }).onFailure(err->{
+                log.info(">>>>unlock err1:{}",err.getMessage());
+                redisUtils.unlockReentrant(context, key);
+            });
         });
     }
 

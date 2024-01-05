@@ -20,6 +20,7 @@
         <hutool.version>5.4.0</hutool.version>
         <mysql-connector.version>8.0.20</mysql-connector.version>
         <io.agroal.version>1.16</io.agroal.version>
+        <org.redisson.version>3.23.3</org.redisson.version>
     </properties>
 
     <dependencies>
@@ -149,6 +150,11 @@
             <artifactId>agroal-pool</artifactId>
             <version>${io.agroal.version}</version>
             <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+            <version>${org.redisson.version}</version>
         </dependency>
     </dependencies>
 
