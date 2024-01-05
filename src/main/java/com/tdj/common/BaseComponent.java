@@ -17,11 +17,12 @@ import java.util.Properties;
 public abstract class BaseComponent implements ModuleInit {
     public Future<Boolean> init(Vertx vertx, Properties nacosConfig, JsonObject config){
         String className = this.getClass().getName();
-        log.info("{} init.",className);
         Promise<Boolean> promise = Promise.promise();
         vertx.eventBus().consumer("init doInjection", message -> {
             doInjection();
         });
+        log.info("{} init success!",className);
+        promise.complete(true);
         return promise.future();
     }
 

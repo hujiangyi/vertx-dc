@@ -55,7 +55,6 @@ public abstract class BaseDao implements ModuleInit {
 
     public Future<Boolean> init(Vertx vertx, Properties nacosConfig, JsonObject config){
         String className = this.getClass().getName();
-        log.info("{} init.", className);
         Promise<Boolean> promise = Promise.promise();
         pool = DBManager.getPool(vertx,nacosConfig);
         try {

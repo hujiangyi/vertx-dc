@@ -97,7 +97,7 @@ public class App {
     private static Future<Boolean> initModule(Vertx vertx, Properties nacosConfig,JsonObject config, Class clazz) {
         Annotation[] annotations = clazz.getDeclaredAnnotations();
         for (Annotation annotation:annotations) {
-            if (annotation instanceof Dao || annotation instanceof Utils) {
+            if (annotation instanceof Component || annotation instanceof Dao || annotation instanceof Utils) {
                 try{
                     ModuleInit moduleInit = (ModuleInit) Contact.beanMap.get(annotation.annotationType().getName()).get(clazz);
                     return moduleInit.init(vertx,nacosConfig,config);

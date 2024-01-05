@@ -423,7 +423,7 @@ public class RedisUtils implements ModuleInit {
         RedisOptions redisOptions = new RedisOptions()
                 .addConnectionString(nacosConfig.getProperty("redis.host"))
                 .setType(RedisClientType.STANDALONE);
-        log.info("redis NetClientOptions is {}" ,redisOptions.getNetClientOptions().toJson());
+        log.debug("redis NetClientOptions is {}" ,redisOptions.getNetClientOptions().toJson());
         redis = Redis.createClient(vertx,redisOptions);
         redis.connect(handler->{
             if (handler.succeeded()) {
@@ -443,7 +443,7 @@ public class RedisUtils implements ModuleInit {
         RedisOptions redisOptions = new RedisOptions()
                 .addConnectionString(nacosConfig.getProperty("redis.host"))
                 .setType(RedisClientType.STANDALONE);
-        log.info("redis NetClientOptions is {}" ,redisOptions.getNetClientOptions().toJson());
+        log.debug("redis NetClientOptions is {}" ,redisOptions.getNetClientOptions().toJson());
         if (redis != null) {
             redis.close();;
         }

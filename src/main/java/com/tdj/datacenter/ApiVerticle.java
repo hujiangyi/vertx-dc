@@ -3,6 +3,7 @@ package com.tdj.datacenter;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.tdj.common.BaseVerticle;
+import com.tdj.datacenter.component.TestCompontent;
 import com.tdj.datacenter.constant.RedisKeyConstants;
 import com.tdj.datacenter.dao.pojo.Test;
 import com.tdj.common.dingding.DingDingApi;
@@ -46,6 +47,7 @@ public class ApiVerticle  extends BaseVerticle {
     private CheckHandler checkHandler = new CheckHandler();
     private RedisUtils redisUtils;
     private MyTestDao myTestDao;
+    private TestCompontent testCompontent;
 
     @Override
     public void doInit() {
@@ -73,6 +75,7 @@ public class ApiVerticle  extends BaseVerticle {
         router.post("/datacenter/redis/eval/").handler(this::redisEval);
         router.post("/datacenter/mysql/select/").handler(this::mysqlSelect);
         router.post("/datacenter/mysql/dotest/").handler(this::mysqlDoTest);
+        router.post("/datacenter/component/test/").handler(this::componentTest);
 
         // 将路由与服务器关联
         server.requestHandler(router);
@@ -540,6 +543,20 @@ public class ApiVerticle  extends BaseVerticle {
                     routingContext.response().putHeader("content-type", "text/plain");
                     routingContext.response().end("OK");
                 });
+            }catch (Exception e) {
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end("ERROR");
+            }
+        });
+    }
+    private void componentTest(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            try {
+                JsonObject json = buffer.toJsonObject();
+                testCompontent.doTest();
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end("OK");
             }catch (Exception e) {
                 routingContext.response().putHeader("content-type", "text/plain");
                 routingContext.response().end("ERROR");
