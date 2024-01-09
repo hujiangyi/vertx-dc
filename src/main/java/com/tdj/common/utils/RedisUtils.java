@@ -3,6 +3,7 @@ package com.tdj.common.utils;
 import com.alibaba.nacos.common.utils.StringUtils;
 import com.tdj.common.ModuleInit;
 import com.tdj.common.annotation.Utils;
+import com.tdj.common.listener.RedisKeyExpireListener;
 import com.tdj.common.redisson.VertxRedisson;
 import io.vertx.core.*;
 import io.vertx.core.json.JsonArray;
@@ -10,6 +11,8 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.redis.client.*;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
+import org.redisson.api.RTopic;
+import org.redisson.client.codec.StringCodec;
 import org.redisson.config.Config;
 
 import java.util.ArrayList;
@@ -69,6 +72,8 @@ public class RedisUtils implements ModuleInit {
                     .setPassword(nacosConfig.getProperty("redisson.password"))
                     .setDatabase(Integer.parseInt(nacosConfig.getProperty("redisson.db")));
             VertxRedisson redisson = (VertxRedisson) VertxRedisson.createVertxRedisson(redissonConfig);
+            RTopic topic = redisson.getTopic("__keyevent@" + Integer.parseInt(nacosConfig.getProperty("redisson.db")) + "__:expired", new StringCodec());
+            topic.addListener(String.class, new RedisKeyExpireListener(vertx));
             promise.complete(redisson);
             return null;
         });

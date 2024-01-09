@@ -16,11 +16,16 @@
         <org.slf4j.version>1.7.21</org.slf4j.version>
         <ch.qos.logback.version>1.2.6</ch.qos.logback.version>
         <com.aliyun.dingtalk.version>2.0.0</com.aliyun.dingtalk.version>
+        <com.alibaba.druid.version>1.1.23</com.alibaba.druid.version>
         <feign.version>11.9</feign.version>
         <hutool.version>5.4.0</hutool.version>
         <mysql-connector.version>8.0.20</mysql-connector.version>
         <io.agroal.version>1.16</io.agroal.version>
         <org.redisson.version>3.23.3</org.redisson.version>
+        <org.jooq.version>3.14.9</org.jooq.version>
+        <io.github.jklingsporn.version>6.3.0</io.github.jklingsporn.version>
+        <org.apache.maven.plugins>3.8.1</org.apache.maven.plugins>
+        <com.fasterxml.jackson.version>2.12.2</com.fasterxml.jackson.version>
     </properties>
 
     <dependencies>
@@ -156,6 +161,47 @@
             <artifactId>redisson</artifactId>
             <version>${org.redisson.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.jooq</groupId>
+            <artifactId>jooq</artifactId>
+            <version>${org.jooq.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jooq</groupId>
+            <artifactId>jooq-codegen-maven</artifactId>
+            <version>${org.jooq.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.jklingsporn</groupId>
+            <artifactId>vertx-jooq-classic-jdbc</artifactId>
+            <version>${io.github.jklingsporn.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.jklingsporn</groupId>
+            <artifactId>vertx-jooq-generate</artifactId>
+            <version>${io.github.jklingsporn.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>${org.apache.maven.plugins}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid</artifactId>
+            <version>${com.alibaba.druid.version}</version>
+        </dependency>
+        <!-- jackson -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${com.fasterxml.jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>${com.fasterxml.jackson.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -163,6 +209,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>${org.apache.maven.plugins}</version>
                 <configuration>
                     <source>8</source>
                     <target>8</target>
@@ -190,6 +237,99 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <!-- Specify the maven code generator plugin -->
+                <groupId>org.jooq</groupId>
+                <artifactId>jooq-codegen-maven</artifactId>
+                <version>${org.jooq.version}</version>
+
+                <!-- The plugin should hook into the generate goal -->
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+
+                <dependencies>
+                    <dependency>
+                        <groupId>mysql</groupId>
+                        <artifactId>mysql-connector-java</artifactId>
+                        <version>${mysql-connector.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>io.github.jklingsporn</groupId>
+                        <artifactId>vertx-jooq-generate</artifactId>
+                        <version>${io.github.jklingsporn.version}</version>
+                    </dependency>
+                </dependencies>
+
+                <!-- Specify the plugin configuration.
+                     The configuration format is the same as for the standalone code generator -->
+                <configuration>
+                    <!-- JDBC connection parameters -->
+                    <jdbc>
+                        <driver>com.mysql.cj.jdbc.Driver</driver>
+                        <url>jdbc:mysql://hw.zhengyakeji.com:7806/test</url>
+                        <user>test</user>
+                        <password>test001.</password>
+                    </jdbc>
+
+                    <!-- Generator parameters -->
+                    <generator>
+                        <name>io.github.jklingsporn.vertx.jooq.generate.classic.ClassicJDBCVertxGenerator</name>
+                        <!-- use 'io.github.jklingsporn.vertx.jooq.generate.classic.ClassicJDBCGuiceVertxGenerator' to enable Guice DI -->
+                        <database>
+                            <name>org.jooq.meta.mysql.MySQLDatabase</name>
+                            <includes>.*</includes>
+                            <inputSchema>test</inputSchema>
+<!--                            <outputSchema>YOUR_OUTPUT_SCHEMA</outputSchema>-->
+                            <unsignedTypes>false</unsignedTypes>
+                            <forcedTypes>
+                                <forcedType>
+                                    <name>NUMERIC</name>
+                                    <includeTypes>(?i:(NUMERIC|NUMBER|DECIMAL)\(\d+,0\))</includeTypes>
+                                </forcedType>
+                                <!-- Convert varchar column with name 'someJsonObject' to a io.vertx.core.json.JsonObject-->
+                                <forcedType>
+                                    <userType>io.vertx.core.json.JsonObject</userType>
+                                    <converter>io.github.jklingsporn.vertx.jooq.shared.JsonObjectConverter</converter>
+                                    <includeExpression>someJsonObject</includeExpression>
+                                    <includeTypes>.*</includeTypes>
+                                    <nullability>ALL</nullability>
+                                    <objectType>ALL</objectType>
+                                </forcedType>
+                                <!-- Convert varchar column with name 'someJsonArray' to a io.vertx.core.json.JsonArray-->
+                                <forcedType>
+                                    <userType>io.vertx.core.json.JsonArray</userType>
+                                    <converter>io.github.jklingsporn.vertx.jooq.shared.JsonArrayConverter</converter>
+                                    <includeExpression>someJsonArray</includeExpression>
+                                    <includeTypes>.*</includeTypes>
+                                    <nullability>ALL</nullability>
+                                    <objectType>ALL</objectType>
+                                </forcedType>
+                            </forcedTypes>
+                        </database>
+                        <target>
+                            <!-- This is where jOOQ will put your files -->
+                            <packageName>com.tdj.jooq</packageName>
+                            <directory>/Users/hujiangyi/workspace_tianyuan/back_datacenter/src/main/java</directory>
+                        </target>
+                        <generate>
+                            <interfaces>true</interfaces>
+                            <daos>true</daos>
+                            <fluentSetters>true</fluentSetters>
+                        </generate>
+
+
+                        <strategy>
+                            <name>io.github.jklingsporn.vertx.jooq.generate.VertxGeneratorStrategy</name>
+                        </strategy>
+                    </generator>
+
+                </configuration>
             </plugin>
         </plugins>
     </build>
