@@ -6,6 +6,7 @@ import com.tdj.common.annotation.Component;
 import com.tdj.common.annotation.mysql.Dao;
 import com.tdj.common.annotation.Utils;
 import com.tdj.common.utils.RedisUtils;
+import com.tdj.common.verticle.JackonConfigVerticle;
 import com.tdj.common.verticle.NacosVerticle;
 import io.vertx.config.ConfigRetriever;
 import io.vertx.config.ConfigRetrieverOptions;
@@ -61,6 +62,7 @@ public class App {
                 }
                 DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(ar.result());
                 Contact.getVertxInstance().deployVerticle(new NacosVerticle(),deploymentOptions);
+                Contact.getVertxInstance().deployVerticle(new JackonConfigVerticle(),deploymentOptions);
 //                Contact.getVertxInstance().deployVerticle(new CheckVerticle(),deploymentOptions);
                 Contact.getVertxInstance().deployVerticle(new ApiVerticle(),deploymentOptions);
 //                Contact.getVertxInstance().deployVerticle(new ScheduleVerticle(),deploymentOptions);

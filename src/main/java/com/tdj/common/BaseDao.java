@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -56,8 +57,8 @@ public abstract class BaseDao implements ModuleInit {
     public Future<Boolean> init(Vertx vertx, Properties nacosConfig, JsonObject config){
         String className = this.getClass().getName();
         Promise<Boolean> promise = Promise.promise();
-        pool = DBManager.getPool(vertx,nacosConfig);
         try {
+            pool = DBManager.getPool(vertx,nacosConfig);
             List<String> injectNames = new ArrayList<>();
             injectNames.add("redisUtils");
             Object obj = Contact.beanMap.get(Dao.class.getName()).get(this.getClass());
@@ -66,13 +67,17 @@ public abstract class BaseDao implements ModuleInit {
                 field.setAccessible(true);
                 field.set(obj,Contact.beanMap.get(Utils.class.getName()).get(RedisUtils.class));
             }
+            initDao(vertx, nacosConfig, config);
             log.info("{} init success!", className);
             promise.complete();
-        } catch (NoSuchFieldException | IllegalAccessException e) {
+        } catch (SQLException | NoSuchFieldException | IllegalAccessException e) {
             log.error("{} init faild!", className, e);
             promise.fail(e);
         }
         return promise.future();
+    }
+
+    protected void initDao(Vertx vertx, Properties nacosConfig, JsonObject config) throws SQLException{
     }
 
     public <T extends Mapper<T>> Future<T> selectOne(String sql, Class<T> clazz) {

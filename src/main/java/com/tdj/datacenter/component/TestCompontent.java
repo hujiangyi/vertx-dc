@@ -19,7 +19,7 @@ public class TestCompontent extends BaseComponent {
             log.info("test component:{}",str);
             Test test = new Test();
             test.setId(16L);
-            return myTestDao.myFirstSelect(test.getTestSql(),test);
+            return myTestDao.myFirstSelect();
         }).compose(list->{
             log.info("test component list:{}",list);
             return Future.succeededFuture();

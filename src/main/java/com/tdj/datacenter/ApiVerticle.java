@@ -3,25 +3,27 @@ package com.tdj.datacenter;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.tdj.common.BaseVerticle;
-import com.tdj.datacenter.component.TestCompontent;
-import com.tdj.datacenter.constant.RedisKeyConstants;
-import com.tdj.datacenter.dao.pojo.Test;
+import com.tdj.common.constant.EventBusAddressConstant;
 import com.tdj.common.dingding.DingDingApi;
 import com.tdj.common.dingding.DingDingApiNew;
+import com.tdj.common.domain.RedisEvent;
 import com.tdj.common.domain.Result;
 import com.tdj.common.utils.FeignUtils;
 import com.tdj.common.utils.RedisUtils;
+import com.tdj.datacenter.component.TestCompontent;
 import com.tdj.datacenter.dao.MyTestDao;
+import com.tdj.datacenter.dao.pojo.Test;
 import com.tdj.datacenter.domain.EntUser;
 import com.tdj.datacenter.domain.Oauth2Token;
 import com.tdj.datacenter.domain.StockConfig;
 import com.tdj.datacenter.feign.PlatformService;
 import com.tdj.datacenter.handler.CheckHandler;
-import com.tdj.datacenter.lua.RedisScriptsConstants;
+import com.tdj.jooq.tables.pojos.CwSum;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.Vertx;
+import io.vertx.core.eventbus.Message;
+import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonArray;
@@ -35,7 +37,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
@@ -73,8 +74,10 @@ public class ApiVerticle  extends BaseVerticle {
         router.post("/datacenter/redis/getlock/").handler(this::redisGetLock);
         router.post("/datacenter/redis/dellock/").handler(this::redisDelLock);
         router.post("/datacenter/redis/eval/").handler(this::redisEval);
+        router.post("/datacenter/redis/event/").handler(this::redisEvent);
         router.post("/datacenter/mysql/select/").handler(this::mysqlSelect);
         router.post("/datacenter/mysql/dotest/").handler(this::mysqlDoTest);
+        router.post("/datacenter/mysql/insert/").handler(this::mysqlInsert);
         router.post("/datacenter/component/test/").handler(this::componentTest);
 
         // 将路由与服务器关联
@@ -518,6 +521,36 @@ public class ApiVerticle  extends BaseVerticle {
         });
     }
 
+    private void redisEvent(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            JsonObject json = buffer.toJsonObject();
+            String key = json.getString("key");
+            final MessageConsumer<RedisEvent<String>> messageConsumer = vertx.eventBus().<RedisEvent<String>>consumer(EventBusAddressConstant.REDIS_KEY_EXPIRE_EVENT);
+            messageConsumer.handler((Message<RedisEvent<String>> message) -> {
+                log.info("收取到过期的事件:" + message.body().getEvent() + "; Thread: " + Thread.currentThread().toString());
+                log.info("过期的key="+message.body().getKey());
+                if (message.body().getEvent().equalsIgnoreCase("__keyevent@" + nacosConfig.getProperty("redisson.db") + "__:expired")
+                    && message.body().getKey().equalsIgnoreCase(key)) {
+                    log.info("监听到一次{}的过期事件,不会再监听第二次",key);
+                    messageConsumer.unregister();
+                }
+            });
+            final MessageConsumer<RedisEvent<String>> messageConsumer2 = vertx.eventBus().<RedisEvent<String>>consumer(EventBusAddressConstant.REDIS_KEY_EXPIRE_EVENT);
+            messageConsumer2.handler((Message<RedisEvent<String>> message) -> {
+                log.info("收取到过期的事件2:" + message.body().getEvent() + "; Thread: " + Thread.currentThread().toString());
+                log.info("过期的key2="+message.body().getKey());
+                if (message.body().getEvent().equalsIgnoreCase("__keyevent@" + nacosConfig.getProperty("redisson.db") + "__:expired")
+                    && message.body().getKey().equalsIgnoreCase(key)) {
+                    log.info("监听到一次{}的过期事件2,不会再监听第二次",key);
+                    messageConsumer2.unregister();
+                }
+            });
+            routingContext.response().putHeader("content-type", "text/plain");
+            routingContext.response().end("OK");
+        });
+    }
+
     private void mysqlDoTest(RoutingContext routingContext) {
         HttpServerRequest request = routingContext.request();
         request.bodyHandler(buffer -> {
@@ -535,15 +568,40 @@ public class ApiVerticle  extends BaseVerticle {
                 JsonObject param1 = json.getJsonObject("param");
                 Test t = new Test();
                 t.setId(param1.getLong("id"));
-                Future<List<Test>> future = myTestDao.myFirstSelect(sql, t);
-                future.onSuccess(tests->{
-                    for (Test test : tests) {
+                Future<List<CwSum>> future = myTestDao.myFirstSelect();
+                future.onSuccess(cwSums->{
+                    for (CwSum test : cwSums) {
                         log.info(test.toString());
                     }
                     routingContext.response().putHeader("content-type", "text/plain");
                     routingContext.response().end("OK");
                 });
             }catch (Exception e) {
+                routingContext.response().putHeader("content-type", "text/plain");
+                routingContext.response().end("ERROR");
+            }
+        });
+    }
+    private void mysqlInsert(RoutingContext routingContext) {
+        HttpServerRequest request = routingContext.request();
+        request.bodyHandler(buffer -> {
+            try {
+                JsonObject json = buffer.toJsonObject();
+                String sql = json.getString("sql");
+                JsonObject param1 = json.getJsonObject("param");
+                CwSum cwSum = param1.mapTo(CwSum.class);
+
+                myTestDao.myInsert(cwSum).compose(row->{
+                    return  myTestDao.myFirstSelect();
+                }).onSuccess(cwSums->{
+                    for (CwSum test : cwSums) {
+                        log.info(test.toString());
+                    }
+                    routingContext.response().putHeader("content-type", "text/plain");
+                    routingContext.response().end("OK");
+                });
+            }catch (Exception e) {
+                log.error("",e);
                 routingContext.response().putHeader("content-type", "text/plain");
                 routingContext.response().end("ERROR");
             }
