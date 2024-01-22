@@ -41,7 +41,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.jay.stock.App</mainClass>
+                            <mainClass>com.tdj.datacenter.App</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

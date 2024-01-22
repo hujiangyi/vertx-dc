@@ -28,6 +28,7 @@ public class App {
             if (ar.succeeded()) {
                 DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(ar.result());
                 Context.getVertxInstance().deployVerticle(new ApiVerticle(),deploymentOptions);
+                Context.getVertxInstance().deployVerticle(new SubstituteSignoVerticle(),deploymentOptions);
                 Context.getVertxInstance().deployVerticle(new MainLancher(),deploymentOptions);
                 Context.getVertxInstance().deployVerticle(new JackonConfigVerticle(),deploymentOptions);
                 Context.getVertxInstance().deployVerticle(new NacosVerticle(),deploymentOptions);
