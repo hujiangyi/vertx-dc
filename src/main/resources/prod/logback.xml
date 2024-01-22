@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- 开启后可以通过jmx动态控制日志级别(springboot Admin的功能) -->
+    <!--<jmxConfigurator/>-->
+    <!-- 控制台输出：CONSOLE -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <!--<pattern>%d %p (%file:%line\)- %m%n</pattern>-->
+            <!--格式化输出：%d:表示日期    %thread:表示线程名     %-5level:级别从左显示5个字符宽度  %msg:日志消息    %n:是换行符-->
+            <pattern>
+                %red(%d{yyyy-MM-dd HH:mm:ss.SSS}) %green([%thread]) %highlight(%-5level) %boldMagenta(%logger)
+                --> %cyan(%msg%n)
+            </pattern>
+        </encoder>
+        <param name="Encoding" value="UTF-8"/>
+    </appender>
+
+    <!--  引入 ${FILE_LOG_PATTERN}  -->
+    <!-- 服务器日志：创建文件夹的路径 -->
+    <property name="FILE_PATH" value="/home/zydeploy/work/log"/>
+
+    <!-- 文件输出 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 文件输出格式 -->
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>utf-8</charset>
+        </encoder>
+        <!-- 文件路径 -->
+        <file>${FILE_PATH}/datacenter.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- 规定100mb，日志文件超过这个大小把文件重新命名成khptapp-control.%d{yyyy-MM-dd}.%i.log，%d是当前时间，%i是同时间下的第一个文件 -->
+            <fileNamePattern>${FILE_PATH}/datacenter.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>
