@@ -1,11 +1,7 @@
 package com.tdj.datacenter;
 
 import com.jay.common.BaseVerticle;
-import com.tdj.common.utils.CRC16Util;
-import com.tdj.common.utils.StringUtils;
 import io.vertx.core.Future;
-import io.vertx.core.json.Json;
-import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.rabbitmq.QueueOptions;
 import io.vertx.rabbitmq.RabbitMQClient;
@@ -38,9 +34,15 @@ public class SubstituteSignoVerticle extends BaseVerticle {
                         String topic = json.getString("topic");
 //                        String payload = json.getString("payload");
                         log.info("Substitute:{}", json);
-                        json.put("topic",nacosConfig.getProperty("tianyuan.rabbitmq.substitute.topic"));
+                        if (topic.startsWith("/a1BkUFnh0eA/")) {
+                            topic = topic.replaceAll("\\.\\w+/","/");
+                            json.put("topic",topic);
+                        } else {
+                            json.put("topic",nacosConfig.getProperty("tianyuan.rabbitmq.substitute.topic"));
+                        }
                         client.basicPublish("", nacosConfig.getProperty("tianyuan.rabbitmq.queue.cmd"), json.toBuffer());
-//                        JsonObject body = new JsonObject(payload);
+// TODO 以下代码是播报声音的格式分析 以及如何修改报表声音的例子代码 可以不用删除
+                        //                        JsonObject body = new JsonObject(payload);
 //                        String msgCmd = body.getString("cmd");
 //                        if (msgCmd.equalsIgnoreCase("rs485")) {
 //                            JsonArray rs485ch1_data = body.getJsonArray("rs485ch1_data");
