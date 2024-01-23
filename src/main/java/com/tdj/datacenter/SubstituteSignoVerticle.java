@@ -33,13 +33,13 @@ public class SubstituteSignoVerticle extends BaseVerticle {
                         log.info("yuanshi:{}", json);
                         String topic = json.getString("topic");
 //                        String payload = json.getString("payload");
-                        log.info("Substitute:{}", json);
                         if (topic.startsWith("/a1BkUFnh0eA/")) {
-                            topic = topic.replaceAll("\\.\\w+/","/");
+                            topic = topic.replaceAll("#.*/","/");
                             json.put("topic",topic);
                         } else {
                             json.put("topic",nacosConfig.getProperty("tianyuan.rabbitmq.substitute.topic"));
                         }
+                        log.info("Substitute:{}", json);
                         client.basicPublish("", nacosConfig.getProperty("tianyuan.rabbitmq.queue.cmd"), json.toBuffer());
 // TODO 以下代码是播报声音的格式分析 以及如何修改报表声音的例子代码 可以不用删除
                         //                        JsonObject body = new JsonObject(payload);
